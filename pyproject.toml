@@ -10,6 +10,7 @@ dependencies = [
 
 [dependency-groups]
 dev = [
+    "icecream>=2.1.5",
     "ruff>=0.12.1",
     "wagtail>=7.0.1",
 ]

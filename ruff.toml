@@ -1,0 +1,53 @@
+target-version = "py313"
+exclude = [
+    ".venv",
+    ".eggs",
+    ".git",
+]
+respect-gitignore = false # https://github.com/astral-sh/ruff/issues/9381
+[lint]
+select = [
+    "B",
+    "C",
+    "E",
+    "W",
+    "F",
+    "FLY",
+    "DJ",
+    "I",
+    "N",
+    "S",
+    "PLC",
+    "RUF",
+    "UP",
+]
+#ignore = [
+#    "C901",
+#    "E501", # line too long 🤷
+#    "E722", # can't deal with all the intentional excepts right now
+#    "N815", # mixedCase situations
+#    "S110", # different rule for bare excepts
+#    "S603",
+#    "S607",
+#    "RUF012", # see https://github.com/astral-sh/ruff/issues/5243
+#    "PLC0415",
+#]
+
+
+[lint.isort]
+known-first-party = ["apps"]
+section-order = [
+    "future",
+    "standard-library",
+    "third-party",
+    "django",
+    "first-party",
+    "local-folder"
+]
+[lint.isort.sections]
+"django" = [
+    "django",
+    "wagtail",
+
+]
+

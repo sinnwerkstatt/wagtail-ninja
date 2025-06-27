@@ -155,10 +155,10 @@ class WagtailRouter(Router):
             "/pages/", ["GET"], list_pages, response=list[BasePageSchema]
         )
         self.add_api_operation(
-            "/pages/{page_id}/", ["GET"], get_page, response=all_page_schemas
+            "/pages/find/", ["GET"], find_page, response=all_page_schemas
         )
         self.add_api_operation(
-            "/pages/find/", ["GET"], find_page, response=all_page_schemas
+            "/pages/{page_id}/", ["GET"], get_page, response=all_page_schemas
         )
 
 

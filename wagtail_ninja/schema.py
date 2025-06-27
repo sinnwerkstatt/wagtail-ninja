@@ -1,3 +1,4 @@
+import uuid
 from datetime import datetime
 from typing import Any
 
@@ -22,14 +23,14 @@ class PageMeta(Schema):
     locale: str
 
 
-class StreamBlock(Schema):
+class StreamBlockSchema(Schema):
     type: str
     value: Any
-    id: str
+    id: uuid.UUID
 
 
 class StreamFieldSchema(RootModel):
-    root: list[StreamBlock] = []
+    root: list[StreamBlockSchema] = []
 
 
 class BasePageSchema(ModelSchema):

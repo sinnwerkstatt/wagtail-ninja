@@ -38,13 +38,14 @@ def _create_method_resolver(_field: str):
     return staticmethod(lambda page, context: getattr(page, _field)())
 
 
-def __create_streamfield_resolver(_field: str):
-    def serialize_streamfield(sfield: StreamField, context):
-        cntnt = sfield.stream_block.get_api_representation(sfield, context)
-        return cntnt
+def _serialize_streamfield(sfield: StreamField, context):
+    cntnt = sfield.stream_block.get_api_representation(sfield, context)
+    return cntnt
 
+
+def _create_streamfield_resolver(_field: str):
     return staticmethod(
-        lambda page, context: serialize_streamfield(getattr(page, _field), context)
+        lambda page, context: _serialize_streamfield(getattr(page, _field), context)
     )
 
 
@@ -69,7 +70,7 @@ def _wagtail_block_map(block: wagtail_blocks.FieldBlock):
     return value_type
 
 
-def create_streamfield_schema(
+def _create_streamfield_schema(
     model_field: StreamField, page_model: Page, fieldname: str
 ):
     blocks = None
@@ -94,7 +95,54 @@ def create_streamfield_schema(
         (StreamFieldSchema,),
         {"__annotations__": {"root": list[blocks]}},
     )
-    return custom_stream_field, __create_streamfield_resolver(fieldname)
+    return custom_stream_field
+
+
+def _create_page_schema(page_model: Page):
+    props = {
+        "__module__": sys.modules[__name__].__name__,
+        "__annotations__": {"content_type": Literal[page_model._meta.model_name]},
+    }
+
+    relevant_fields = []
+    for field in getattr(page_model, "api_fields", []):
+        try:
+            model_field = page_model._meta.get_field(field)
+
+            if isinstance(model_field, StreamField):
+                props["__annotations__"][field] = _create_streamfield_schema(
+                    model_field, page_model, field
+                )
+                props[f"resolve_{field}"] = _create_streamfield_resolver(field)
+
+            if isinstance(model_field, RichTextField):
+                props["__annotations__"][field] = str
+                props[f"resolve_{field}"] = _create_richtext_resolver(field)
+
+            relevant_fields.append(field)
+
+        except FieldDoesNotExist:
+            ex_fnc = getattr(page_model, field, None)
+
+            signature = inspect.signature(ex_fnc)
+            return_annotation = signature.return_annotation
+
+            if callable(ex_fnc):
+                props["__annotations__"][field] = (
+                    Any if return_annotation is inspect._empty else return_annotation
+                )
+                props[f"resolve_{field}"] = _create_method_resolver(field)
+
+    cnfg = type(
+        "Config",
+        (BasePageSchema.Config,),
+        {"model": page_model, "model_fields": relevant_fields or ["title"]},
+    )
+    props["Config"] = cnfg
+    props["__annotations__"]["Config"] = ClassVar[type[cnfg]]
+
+    new_class = type(str(page_model.__name__), (BasePageSchema, ModelSchema), props)
+    return new_class
 
 
 class WagtailRouter(Router):
@@ -102,61 +150,13 @@ class WagtailRouter(Router):
         super().__init__(*args, **kwargs)
         self.autodetect()
 
-    @staticmethod
-    def _create_page_schema(page_model: Page):
-        api_fields = getattr(page_model, "api_fields", [])
-
-        props = {
-            "__module__": sys.modules[__name__].__name__,
-            "__annotations__": {},
-        }
-
-        relevant_fields = []
-        for field in api_fields:
-            # print(field)
-            try:
-                model_field = page_model._meta.get_field(field)
-
-                if isinstance(model_field, StreamField):
-                    props["__annotations__"][field], props[f"resolve_{field}"] = (
-                        create_streamfield_schema(model_field, page_model, field)
-                    )
-
-                if isinstance(model_field, RichTextField):
-                    props["__annotations__"][field] = str
-                    props[f"resolve_{field}"] = _create_richtext_resolver(field)
-
-                relevant_fields.append(field)
-            except FieldDoesNotExist:
-                ex_fnc = getattr(page_model, field, None)
-
-                signature = inspect.signature(ex_fnc)
-                return_annotation = signature.return_annotation
-
-                if callable(ex_fnc):
-                    props["__annotations__"][field] = (
-                        Any
-                        if return_annotation is inspect._empty
-                        else return_annotation
-                    )
-                    props[f"resolve_{field}"] = _create_method_resolver(field)
-
-        meta_class = type(
-            "Meta", (), {"model": page_model, "fields": relevant_fields or ["title"]}
-        )
-        props["Meta"] = meta_class
-        props["__annotations__"]["Meta"] = ClassVar[type[meta_class]]
-
-        new_class = type(str(page_model.__name__), (BasePageSchema, ModelSchema), props)
-        return new_class
-
     def _create_pages_schemas(self):
         schemas = None
         for model in get_page_models():
             if model == Page:
                 continue
 
-            page_schema = self._create_page_schema(model)
+            page_schema = _create_page_schema(model)
             if not schemas:
                 schemas = page_schema
             else:
@@ -200,15 +200,16 @@ class WagtailRouter(Router):
             return Http404Json(request.get_full_path())
 
         all_page_schemas = self._create_pages_schemas()
+        type WagtailPages = all_page_schemas
 
         self.add_api_operation(
             "/pages/", ["GET"], list_pages, response=list[BasePageSchema]
         )
         self.add_api_operation(
-            "/pages/find/", ["GET"], find_page, response=all_page_schemas
+            "/pages/find/", ["GET"], find_page, response=WagtailPages
         )
         self.add_api_operation(
-            "/pages/{page_id}/", ["GET"], get_page, response=all_page_schemas
+            "/pages/{page_id}/", ["GET"], get_page, response=WagtailPages
         )
 
 

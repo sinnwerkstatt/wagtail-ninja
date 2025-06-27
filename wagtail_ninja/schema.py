@@ -35,10 +35,19 @@ class StreamFieldSchema(RootModel):
 
 class BasePageSchema(ModelSchema):
     meta: PageMeta
+    content_type: str
 
     class Config:
         model = Page
         model_fields = ["id", "title"]  # noqa: RUF012
+
+    @staticmethod
+    def resolve_content_type(page: Page) -> str:
+        """
+        don't remove.
+        this is part of the essential logic for the resolver to map the correct response
+        """
+        return page.specific_class._meta.model_name
 
     @staticmethod
     def resolve_meta(page: Page, context) -> PageMeta:

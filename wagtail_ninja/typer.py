@@ -1,6 +1,6 @@
 import inspect
 import sys
-from typing import Any, ClassVar, Literal, TypedDict
+from typing import Any, ClassVar, Literal, TypedDict, cast
 
 from ninja import ModelSchema
 
@@ -17,23 +17,23 @@ from wagtail_ninja.schema import (
 )
 
 
-def _create_richtext_resolver(_field: str):
-    return staticmethod(lambda page, context: expand_db_html(getattr(page, _field)))
-
-
-def _create_method_resolver(_field: str):
-    return staticmethod(lambda page, context: getattr(page, _field)())
-
-
-def _serialize_streamfield(sfield: StreamField, context):
+def serialize_streamfield(sfield: StreamField, context):
     cntnt = sfield.stream_block.get_api_representation(sfield, context)
     return cntnt
 
 
 def _create_streamfield_resolver(_field: str):
     return staticmethod(
-        lambda page, context: _serialize_streamfield(getattr(page, _field), context)
+        lambda page, context: serialize_streamfield(getattr(page, _field), context)
     )
+
+
+def _create_richtext_resolver(_field: str):
+    return staticmethod(lambda page, context: expand_db_html(getattr(page, _field)))
+
+
+def _create_method_resolver(_field: str):
+    return staticmethod(lambda page, context: getattr(page, _field)())
 
 
 def _wagtail_block_map(block: wagtail_blocks.FieldBlock):
@@ -114,7 +114,7 @@ def _create_streamfield_schema(
     return custom_stream_field
 
 
-def _create_page_schema(page_model: Page):
+def _create_page_schema(page_model: Page) -> type[ModelSchema]:
     props = {
         "__module__": sys.modules[__name__].__name__,
         "__annotations__": {"content_type": Literal[page_model._meta.label]},
@@ -126,6 +126,7 @@ def _create_page_schema(page_model: Page):
             model_field = page_model._meta.get_field(field)
 
             if isinstance(model_field, StreamField):
+                # TODO: this is not yet working nicely
                 # props["__annotations__"][field] = _create_streamfield_schema(
                 #     model_field, page_model, field
                 # )
@@ -158,22 +159,19 @@ def _create_page_schema(page_model: Page):
     props["Config"] = cnfg
     props["__annotations__"]["Config"] = ClassVar[type]
 
-    new_class = type(
-        str(page_model.__name__), (BasePageDetailSchema, ModelSchema), props
+    return cast(
+        type[ModelSchema],
+        type(str(page_model.__name__), (BasePageDetailSchema, ModelSchema), props),
     )
-    return new_class
 
 
-def create_pages_schemas():
-    schemas = None
+def create_pages_schemas() -> dict[type[Page], type[ModelSchema]]:
+    schemas: dict[type[Page], type[ModelSchema]] = {}
     for model in get_page_models():
         if model == Page:
             continue
 
         page_schema = _create_page_schema(model)
-        if not schemas:
-            schemas = page_schema
-        else:
-            schemas |= page_schema
+        schemas[model] = page_schema
 
     return schemas

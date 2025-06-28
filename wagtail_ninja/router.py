@@ -1,12 +1,19 @@
-from ninja import Router, Schema
+import functools
+import operator
+
+from ninja import ModelSchema, Router, Schema
 
 from django.conf import settings
 from django.http import Http404, HttpRequest, JsonResponse
 from django.shortcuts import get_object_or_404, redirect
 from wagtail.models import Locale, Page, PageViewRestriction, Site
 
-from wagtail_ninja.schema import BasePageSchema
+from wagtail_ninja.schema import BasePageDetailSchema, BasePageSchema
 from wagtail_ninja.typer import create_pages_schemas
+
+from .django_ninja_patch import apply_django_ninja_operation_result_to_response_patch
+
+apply_django_ninja_operation_result_to_response_patch()
 
 
 class Http404Response(Schema):
@@ -88,8 +95,19 @@ def list_pages(request: HttpRequest):
     return qs
 
 
-def get_page(request: HttpRequest, page_id: int):
-    return get_object_or_404(Page, id=page_id).specific
+def get_page_wrapper_fn(schemas: dict[type[Page], type[ModelSchema]]):
+    type WagtailPages = functools.reduce(operator.or_, schemas.values())
+
+    def get_page(request: HttpRequest, page_id: int) -> WagtailPages:
+        page = get_object_or_404(Page, id=page_id).specific
+
+        for page_type, schema in schemas.items():
+            if isinstance(page, page_type):
+                return schema.from_orm(page, context={"request": request})
+
+        return BasePageDetailSchema.from_orm(page, context={"request": request})
+
+    return get_page
 
 
 def find_page(request: HttpRequest, html_path, locale=None):
@@ -121,27 +139,25 @@ def find_page(request: HttpRequest, html_path, locale=None):
     return redirect(request.build_absolute_uri(f"../{page.id}/"))
 
 
-class WagtailNinjaRouter(Router):
+class WagtailNinjaPagesRouter(Router):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self._autodetect()
 
     def _autodetect(self, **kwargs):
         all_page_schemas = create_pages_schemas()
-        type WagtailPages = all_page_schemas
+        type WagtailPages = functools.reduce(operator.or_, all_page_schemas.values())
 
+        self.add_api_operation("/", ["GET"], list_pages, response=list[BasePageSchema])
         self.add_api_operation(
-            "/pages/", ["GET"], list_pages, response=list[BasePageSchema]
-        )
-        self.add_api_operation(
-            "/pages/find/",
+            "/find/",
             ["GET"],
             find_page,
             response={301: None, 302: None, 404: Http404Response},
         )
         self.add_api_operation(
-            "/pages/{page_id}/", ["GET"], get_page, response=WagtailPages
+            "/{page_id}/",
+            ["GET"],
+            get_page_wrapper_fn(all_page_schemas),
+            response=WagtailPages,
         )
-
-
-router = WagtailNinjaRouter()

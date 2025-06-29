@@ -1,6 +1,6 @@
 [project]
 name = "wagtail-ninja"
-version = "0.1.7"
+version = "0.1.8"
 description = "Ninja API for Wagtail"
 requires-python = ">=3.12"
 readme="README.md"

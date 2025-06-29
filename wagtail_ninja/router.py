@@ -4,11 +4,13 @@ import operator
 from ninja import ModelSchema, Router, Schema
 
 from django.conf import settings
-from django.http import Http404, HttpRequest, JsonResponse
+from django.http import Http404, HttpRequest
 from django.shortcuts import get_object_or_404, redirect
+from wagtail.contrib.redirects.middleware import get_redirect as wt_get_redirect
+from wagtail.contrib.redirects.models import Redirect
 from wagtail.models import Locale, Page, PageViewRestriction, Site
 
-from wagtail_ninja.schema import BasePageDetailSchema, BasePageSchema
+from wagtail_ninja.schema import BasePageDetailSchema, BasePageSchema, RedirectSchema
 from wagtail_ninja.typer import create_pages_schemas
 
 from .django_ninja_patch import apply_django_ninja_operation_result_to_response_patch
@@ -17,27 +19,7 @@ apply_django_ninja_operation_result_to_response_patch()
 
 
 class Http404Response(Schema):
-    class Http404ResponseContent(Schema):
-        code: int = 404
-        message: str
-        path: str
-
-    error: Http404ResponseContent
-
-
-class Http404Json(JsonResponse):
-    status_code = 404
-
-    def __init__(self, path, *args, **kwargs):
-        kwargs["data"] = {
-            "error": {
-                "code": 404,
-                "message": "Not Found",
-                "path": path,
-            }
-        }
-
-        super().__init__(*args, **kwargs)
+    detail: str
 
 
 def get_base_queryset(request: HttpRequest):
@@ -69,7 +51,8 @@ def get_base_queryset(request: HttpRequest):
             site = Site.objects.get(**query)
         except Site.MultipleObjectsReturned as err:
             raise Exception(
-                "Your query returned multiple sites. Try adding a port number to your site filter."
+                "Your query returned multiple sites. "
+                "Try adding a port number to your site filter."
             ) from err
     else:
         # Otherwise, find the site from the request
@@ -95,13 +78,14 @@ def list_pages(request: HttpRequest):
     return qs
 
 
-def get_page_wrapper_fn(schemas: dict[type[Page], type[ModelSchema]]):
-    type WagtailPages = functools.reduce(operator.or_, schemas.values())
+def get_page_wrapper_fn(all_page_schemas: dict[type[Page], type[ModelSchema]]):
+    all_schemas = all_page_schemas.values()
+    type WagtailPages = functools.reduce(operator.or_, all_schemas)
 
     def get_page(request: HttpRequest, page_id: int) -> WagtailPages:
         page = get_object_or_404(Page, id=page_id).specific
 
-        for page_type, schema in schemas.items():
+        for page_type, schema in all_page_schemas.items():
             if isinstance(page, page_type):
                 return schema.from_orm(page, context={"request": request})
 
@@ -113,7 +97,7 @@ def get_page_wrapper_fn(schemas: dict[type[Page], type[ModelSchema]]):
 def find_page(request: HttpRequest, html_path, locale=None):
     site = Site.find_for_request(request)
     if not site:
-        return Http404Json(request.get_full_path())
+        raise Http404("No site found")
 
     path_components = [component for component in html_path.split("/") if component]
     root_page = site.root_page
@@ -129,11 +113,11 @@ def find_page(request: HttpRequest, html_path, locale=None):
 
     try:
         page, _, _ = root_page.specific.route(request, path_components)
-    except Http404:
-        return Http404Json(request.get_full_path())
+    except Http404 as err:
+        raise Http404("Page not found") from err
 
     if not get_base_queryset(request).order_by("id").filter(id=page.id).exists():
-        return Http404Json(request.get_full_path())
+        raise Http404("Page not found")
 
     # TODO not a great solution
     return redirect(request.build_absolute_uri(f"../{page.id}/"))
@@ -146,7 +130,8 @@ class WagtailNinjaPagesRouter(Router):
 
     def _autodetect(self, **kwargs):
         all_page_schemas = create_pages_schemas()
-        type WagtailPages = functools.reduce(operator.or_, all_page_schemas.values())
+        all_schemas = all_page_schemas.values()
+        type WagtailPages = functools.reduce(operator.or_, all_schemas)
 
         self.add_api_operation("/", ["GET"], list_pages, response=list[BasePageSchema])
         self.add_api_operation(
@@ -160,4 +145,43 @@ class WagtailNinjaPagesRouter(Router):
             ["GET"],
             get_page_wrapper_fn(all_page_schemas),
             response=WagtailPages,
+        )
+
+
+class WagtailNinjaRedirectsRouter(Router):
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self._autodetect()
+
+    @staticmethod
+    def list_redirects(request: HttpRequest):
+        return Redirect.objects.all()
+
+    @staticmethod
+    def find_redirect(request: HttpRequest, html_path):
+        _redirect = wt_get_redirect(request, html_path)
+        if _redirect:
+            return _redirect
+
+        raise Http404("No redirect found")
+
+    @staticmethod
+    def get_redirect(request: HttpRequest, redirect_id: int):
+        return get_object_or_404(Redirect, id=redirect_id)
+
+    def _autodetect(self, **kwargs):
+        self.add_api_operation(
+            "/", ["GET"], self.list_redirects, response=list[RedirectSchema]
+        )
+        self.add_api_operation(
+            "/find/",
+            ["GET"],
+            self.find_redirect,
+            response=RedirectSchema,
+        )
+        self.add_api_operation(
+            "/{redirect_id}/",
+            ["GET"],
+            self.get_redirect,
+            response=RedirectSchema,
         )

@@ -3,9 +3,10 @@ from datetime import datetime
 from typing import Any
 
 from ninja import ModelSchema, Schema
-from pydantic import RootModel
+from pydantic import Field, RootModel
 
 from wagtail.api.v2.utils import get_full_url
+from wagtail.contrib.redirects.models import Redirect
 from wagtail.models import Page
 
 
@@ -114,3 +115,11 @@ class BasePageDetailSchema(BasePageSchema):
             # alias_of=None, TODO
             parent=parent,
         )
+
+
+class RedirectSchema(ModelSchema):
+    location: str = Field(None, alias="link")
+
+    class Config:
+        model = Redirect
+        model_fields = ["id", "old_path", "is_permanent"]

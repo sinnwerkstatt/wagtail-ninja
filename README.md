@@ -1,3 +1,4 @@
+from ninja import ModelSchema
 
 # wagtail-ninja
 
@@ -38,3 +39,46 @@ you should be able to:
 - get the schema (for further processing) from http://localhost:8000/api/wagtail/v3/openapi.json
 - 
 - 
+
+
+## annotating api_fields
+
+just like with the original wagtail api, you can put arbitrary functions in `api_fields` and they will be evaluated.
+to annotate these, you will quickly run into circular dependency hell, i.e.:
+
+```python
+# schema.py
+class MyPageSchema(ModelSchema):
+    class Meta:
+        model = MyPage
+
+class OtherPageSchema(ModelSchema):
+    class Meta:
+        model = OtherPage
+
+# models.py
+class MyPage(Page):
+    api_fields = ['something']
+    
+    def related_otherpage(self) -> OtherPageSchema:
+        related = ...
+        return  OtherPageSchema.from_orm(related)
+        
+```
+
+The "best" solution right now is to solve it like so:
+
+```python
+    def related_otherpage(self):
+        from .schema import OtherPageSchema
+        related = ...
+        return  OtherPageSchema.from_orm(related)
+
+    @staticmethod
+    def type_fn():
+        from .schema import OtherPageSchema
+        return OtherPageSchema
+    related_otherpage._wagtail_ninja_type_fn = type_fn
+```
+
+

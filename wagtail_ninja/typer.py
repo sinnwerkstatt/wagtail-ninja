@@ -207,10 +207,16 @@ def _create_page_schema(page_model: Page) -> type[ModelSchema]:
             signature = inspect.signature(ex_fnc)
             return_annotation = signature.return_annotation
 
+            _type_fn = getattr(ex_fnc, "_wagtail_ninja_type_fn", None)
+
+            if return_annotation is not inspect._empty:
+                ret_type = return_annotation
+            elif _type_fn and callable(_type_fn):
+                ret_type = _type_fn()
+            else:
+                ret_type = Any
             if callable(ex_fnc):
-                props["__annotations__"][field] = (
-                    Any if return_annotation is inspect._empty else return_annotation
-                )
+                props["__annotations__"][field] = ret_type
                 props[f"resolve_{field}"] = _create_method_resolver(field)
 
     cnfg = type(

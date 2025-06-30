@@ -5,8 +5,13 @@ from typing import Any, ClassVar, Literal, TypedDict, cast
 from ninja import ModelSchema
 
 from django.core.exceptions import FieldDoesNotExist
+from django.db.models import ForeignKey
+from django.urls import reverse
 from wagtail import blocks as wagtail_blocks
+from wagtail.api.v2.utils import get_full_url
+from wagtail.documents.models import Document
 from wagtail.fields import RichTextField, StreamField
+from wagtail.images.models import Image
 from wagtail.models import Page, get_page_models
 from wagtail.rich_text import expand_db_html
 
@@ -14,12 +19,47 @@ from wagtail_ninja.schema import (
     BasePageDetailSchema,
     StreamBlockSchema,
     StreamFieldSchema,
+    WagtailDocumentSchema,
+    WagtailImageSchema,
 )
 
 
 def serialize_streamfield(sfield: StreamField, context):
     cntnt = sfield.stream_block.get_api_representation(sfield, context)
     return cntnt
+
+
+def serialize_image(img: Image | None, context):
+    if img is None:
+        return None
+
+    return {
+        "id": img.id,
+        "meta": {
+            "type": img.__class__._meta.label,
+            "download_url": get_full_url(context["request"], img.file.url),
+        },
+        "title": img.title,
+        "width": img.width,
+        "height": img.height,
+    }
+
+
+def serialize_document(doc: Document | None, context):
+    if doc is None:
+        return None
+
+    return {
+        "id": doc.id,
+        "meta": {
+            "type": doc.__class__._meta.label,
+            "download_url": get_full_url(
+                context["request"],
+                reverse("wagtaildocs_serve", args=(doc.id, doc.filename)),
+            ),
+        },
+        "title": doc.title,
+    }
 
 
 def _create_streamfield_resolver(_field: str):
@@ -30,6 +70,18 @@ def _create_streamfield_resolver(_field: str):
 
 def _create_richtext_resolver(_field: str):
     return staticmethod(lambda page, context: expand_db_html(getattr(page, _field)))
+
+
+def _create_foreignkey_image_resolver(_field: str):
+    return staticmethod(
+        lambda page, context: serialize_image(getattr(page, _field), context)
+    )
+
+
+def _create_foreignkey_document_resolver(_field: str):
+    return staticmethod(
+        lambda page, context: serialize_document(getattr(page, _field), context)
+    )
 
 
 def _create_method_resolver(_field: str):
@@ -115,7 +167,7 @@ def _create_streamfield_schema(
 
 
 def _create_page_schema(page_model: Page) -> type[ModelSchema]:
-    props = {
+    props: dict[Any, Any] = {
         "__module__": sys.modules[__name__].__name__,
         "__annotations__": {"content_type": Literal[page_model._meta.label]},
     }
@@ -136,6 +188,16 @@ def _create_page_schema(page_model: Page) -> type[ModelSchema]:
             if isinstance(model_field, RichTextField):
                 props["__annotations__"][field] = str
                 props[f"resolve_{field}"] = _create_richtext_resolver(field)
+
+            if isinstance(model_field, ForeignKey):
+                if issubclass(model_field.related_model, Image):
+                    props["__annotations__"][field] = WagtailImageSchema | None
+                    props[f"resolve_{field}"] = _create_foreignkey_image_resolver(field)
+                if issubclass(model_field.related_model, Document):
+                    props["__annotations__"][field] = WagtailDocumentSchema | None
+                    props[f"resolve_{field}"] = _create_foreignkey_document_resolver(
+                        field
+                    )
 
             relevant_fields.append(field)
 

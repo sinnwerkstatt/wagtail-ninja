@@ -117,6 +117,32 @@ class BasePageDetailSchema(BasePageSchema):
         )
 
 
+class WagtailImageMetaSchema(Schema):
+    type: str
+    # detail_url: str
+    download_url: str
+
+
+class WagtailImageSchema(Schema):
+    id: int
+    title: str
+    width: int
+    height: int
+    meta: WagtailImageMetaSchema
+
+
+class WagtailDocumentMetaSchema(Schema):
+    type: str
+    # detail_url: str
+    download_url: str
+
+
+class WagtailDocumentSchema(Schema):
+    id: int
+    title: str
+    meta: WagtailDocumentMetaSchema
+
+
 class RedirectSchema(ModelSchema):
     location: str = Field(None, alias="link")
 

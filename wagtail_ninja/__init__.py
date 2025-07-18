@@ -1,0 +1,2 @@
+class WagtailNinjaException(Exception):
+    pass

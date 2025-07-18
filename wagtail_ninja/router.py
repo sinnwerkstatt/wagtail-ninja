@@ -13,7 +13,7 @@ from wagtail.models import Locale, Page, PageViewRestriction, Site
 from wagtail_ninja.schema import BasePageDetailSchema, BasePageSchema, RedirectSchema
 from wagtail_ninja.typer import create_pages_schemas
 
-from .django_ninja_patch import apply_django_ninja_operation_result_to_response_patch
+from ._django_ninja_patch import apply_django_ninja_operation_result_to_response_patch
 
 apply_django_ninja_operation_result_to_response_patch()
 

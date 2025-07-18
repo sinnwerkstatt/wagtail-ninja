@@ -10,13 +10,12 @@ in your wagtail project do something like this:
 ```python
 # api.py
 from ninja import NinjaAPI
-from wagtail_ninja.router import WagtailNinjaPagesRouter
-
-pages_router = WagtailNinjaPagesRouter()
+from wagtail_ninja.router import WagtailNinjaPagesRouter, WagtailNinjaRedirectsRouter
 
 api = NinjaAPI()
 
-api.add_router("/pages/", pages_router)
+api.add_router("/pages/", WagtailNinjaPagesRouter())
+api.add_router("/redirects/", WagtailNinjaRedirectsRouter())
 ```
 
 and then in your urls:

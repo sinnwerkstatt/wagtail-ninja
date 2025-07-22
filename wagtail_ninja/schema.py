@@ -12,16 +12,17 @@ from wagtail.models import Page
 
 class PageMeta(Schema):
     type: str
-    # detail_url: str TODO
+    detail_url: str
     html_url: str
     slug: str
     first_published_at: datetime | None
+    last_published_at: datetime | None
     locale: str
 
 
 class PageParentMeta(Schema):
     type: str
-    # detail_url: str
+    detail_url: str
     html_url: str
 
 
@@ -32,9 +33,10 @@ class PageParent(Schema):
 
     @classmethod
     def from_page(cls, page: Page, context) -> "PageParent":
+        # reverse("api-1.0.0:get_page", kwargs={"page_id": page.id})
         meta = PageParentMeta(
             type=page.specific_class._meta.label,
-            # detail_url="", TODO
+            detail_url=f"TODO page_id: {page.id}",
             html_url=get_full_url(context["request"], page.get_url(context["request"])),
         )
         return PageParent(id=page.id, title=page.title, meta=meta)
@@ -78,10 +80,12 @@ class BasePageSchema(ModelSchema):
     def resolve_meta(page: Page, context) -> PageMeta:
         return PageMeta(
             type=page.specific_class._meta.label,
-            # detail_url="",  # TODO
+            detail_url=get_full_url(context["request"], context["request"].path)
+            + f"/{page.id}/",  # FIXME this only works when the current path is pages/
             html_url=get_full_url(context["request"], page.get_url(context["request"])),
             slug=page.slug,
             first_published_at=page.first_published_at,
+            last_published_at=page.last_published_at,
             locale=page.locale.language_code,
         )
 
@@ -94,7 +98,7 @@ class BasePageDetailSchema(BasePageSchema):
 
     @staticmethod
     def resolve_meta(page: Page, context) -> PageDetailMeta:
-        # cant inherit from superclass. clashes somehow.
+        # can't inherit from superclass. clashes somehow.
 
         prnt = page.get_parent()
         if prnt and not prnt.is_root():
@@ -104,10 +108,11 @@ class BasePageDetailSchema(BasePageSchema):
 
         return PageDetailMeta(
             type=page.specific_class._meta.label,
-            # detail_url="",  # TODO
+            detail_url=get_full_url(context["request"], context["request"].path),
             html_url=get_full_url(context["request"], page.get_url(context["request"])),
             slug=page.slug,
             first_published_at=page.first_published_at,
+            last_published_at=page.last_published_at,
             locale=page.locale.language_code,
             show_in_menus=page.show_in_menus,
             seo_title=page.seo_title,

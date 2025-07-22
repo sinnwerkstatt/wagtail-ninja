@@ -34,7 +34,7 @@ def get_base_queryset(request: HttpRequest):
     for restricted_page in restricted_pages:
         queryset = queryset.not_descendant_of(restricted_page, inclusive=True)
 
-        # Check if we have a specific site to look for
+    # Check if we have a specific site to look for
     if "site" in request.GET:
         # Optionally allow querying by port
         if ":" in request.GET["site"]:
@@ -62,7 +62,7 @@ def get_base_queryset(request: HttpRequest):
         base_queryset = queryset
         queryset = base_queryset.descendant_of(site.root_page, inclusive=True)
 
-        # If internationalisation is enabled, include pages from other language trees
+        # If internationalization is enabled, include pages from other language trees
         if getattr(settings, "WAGTAIL_I18N_ENABLED", False):
             for translation in site.root_page.get_translations():
                 queryset |= base_queryset.descendant_of(translation, inclusive=True)

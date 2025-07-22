@@ -86,7 +86,7 @@ def get_page_wrapper_fn(all_page_schemas: dict[type[Page], type[ModelSchema]]):
         page = get_object_or_404(Page, id=page_id).specific
 
         for page_type, schema in all_page_schemas.items():
-            if isinstance(page, page_type):
+            if type(page) is page_type:
                 return schema.from_orm(page, context={"request": request})
 
         return BasePageDetailSchema.from_orm(page, context={"request": request})

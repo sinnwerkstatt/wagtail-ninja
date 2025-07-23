@@ -124,6 +124,8 @@ def _wagtail_block_map(block: wagtail_blocks.FieldBlock, ident):
             wagtail_blocks.CharBlock()
             | wagtail_blocks.RichTextBlock()
             | wagtail_blocks.TextBlock()
+            | wagtail_blocks.EmailBlock()
+            | wagtail_blocks.URLBlock()
         ):
             if ident not in WAGTAIL_STRUCT_BLOCKS:
                 WAGTAIL_STRUCT_BLOCKS[ident] = str
@@ -138,6 +140,8 @@ def _wagtail_block_map(block: wagtail_blocks.FieldBlock, ident):
             return int
         case wagtail_blocks.FloatBlock():
             return float
+        case wagtail_blocks.ListBlock():
+            return list[_wagtail_block_map(block.child_block, ident)]
         case wagtail_blocks.StreamBlock():
             props = {}
             for name, child in block.child_blocks.items():

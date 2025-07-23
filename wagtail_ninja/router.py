@@ -10,7 +10,11 @@ from wagtail.contrib.redirects.middleware import get_redirect as wt_get_redirect
 from wagtail.contrib.redirects.models import Redirect
 from wagtail.models import Locale, Page, PageViewRestriction, Site
 
-from wagtail_ninja.schema import BasePageDetailSchema, BasePageSchema, RedirectSchema
+from wagtail_ninja.schema import (
+    BasePageDetailSchema,
+    BasePageModelSchema,
+    RedirectSchema,
+)
 from wagtail_ninja.typer import create_pages_schemas
 
 from ._django_ninja_patch import apply_django_ninja_operation_result_to_response_patch
@@ -133,7 +137,9 @@ class WagtailNinjaPagesRouter(Router):
         all_schemas = all_page_schemas.values()
         type WagtailPages = functools.reduce(operator.or_, all_schemas)
 
-        self.add_api_operation("/", ["GET"], list_pages, response=list[BasePageSchema])
+        self.add_api_operation(
+            "/", ["GET"], list_pages, response=list[BasePageModelSchema]
+        )
         self.add_api_operation(
             "/find/",
             ["GET"],

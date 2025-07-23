@@ -60,13 +60,9 @@ class StreamFieldSchema(RootModel):
     root: list[StreamBlockSchema] = []
 
 
-class BasePageSchema(ModelSchema):
+class BasePageSchema(Schema):
     meta: PageMeta
     content_type: str
-
-    class Config:
-        model = Page
-        model_fields = ["id", "title"]  # noqa: RUF012
 
     @staticmethod
     def resolve_content_type(page: Page) -> str:
@@ -90,10 +86,16 @@ class BasePageSchema(ModelSchema):
         )
 
 
-class BasePageDetailSchema(BasePageSchema):
+class BasePageModelSchema(BasePageSchema, ModelSchema):
+    class Config:
+        model = Page
+        model_fields = ["id", "title"]  # noqa: RUF012
+
+
+class BasePageDetailSchema(BasePageModelSchema):
     meta: PageDetailMeta
 
-    class Config(BasePageSchema.Config):
+    class Config(BasePageModelSchema.Config):
         pass
 
     @staticmethod

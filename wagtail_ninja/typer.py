@@ -1,4 +1,5 @@
 import inspect
+import logging
 import sys
 from collections.abc import Callable
 from datetime import date, datetime
@@ -27,6 +28,8 @@ from wagtail_ninja.schema import (
     WagtailDocumentSchema,
     WagtailImageSchema,
 )
+
+logger = logging.getLogger(__name__)
 
 
 def serialize_streamfield(sfield: StreamField, context):
@@ -120,6 +123,11 @@ def _wagtail_block_map(block: wagtail_blocks.FieldBlock, ident):
         if return_annotation is not inspect._empty:
             return return_annotation
 
+        # check for _wagtail_ninja_type_fn
+        if _type_fn := getattr(get_api_rep_fn, "_wagtail_ninja_type_fn", None):
+            if callable(_type_fn):
+                return _type_fn()
+
     match block:
         case (
             wagtail_blocks.CharBlock()
@@ -166,6 +174,7 @@ def _wagtail_block_map(block: wagtail_blocks.FieldBlock, ident):
             return WAGTAIL_STRUCT_BLOCKS[ident]
 
         case _:
+            logger.warning(f"unhandled block type: {block}")
             return Any
 
 

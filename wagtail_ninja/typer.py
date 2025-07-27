@@ -1,6 +1,7 @@
 import inspect
 import sys
 from collections.abc import Callable
+from datetime import date, datetime
 from typing import Any, ClassVar, Literal, TypedDict, cast
 
 from ninja import ModelSchema
@@ -140,6 +141,10 @@ def _wagtail_block_map(block: wagtail_blocks.FieldBlock, ident):
             return int
         case wagtail_blocks.FloatBlock():
             return float
+        case wagtail_blocks.DateBlock():
+            return date
+        case wagtail_blocks.DateTimeBlock():
+            return datetime
         case wagtail_blocks.ListBlock():
             return list[_wagtail_block_map(block.child_block, ident)]
         case wagtail_blocks.StreamBlock():

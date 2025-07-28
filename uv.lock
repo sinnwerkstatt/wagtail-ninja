@@ -677,8 +677,20 @@ wheels = [
 ]
 
 [[package]]
+name = "wagtail-headless-preview"
+version = "0.8.0"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "wagtail" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/b4/28/87fda34fd89999bee03519a614ddca608def6d07b69d93365833c434b9c5/wagtail_headless_preview-0.8.0.tar.gz", hash = "sha256:581d8419cd1ef1f7de88235445e9695e5591d46259283d56bfe814e8620fa1d5", size = 13957, upload-time = "2024-02-23T15:53:44.986Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/62/57/bb6c10a11f7a0ec0d8e10ec99b4c7b5a6036e8846e61d145966b6c72113d/wagtail_headless_preview-0.8.0-py3-none-any.whl", hash = "sha256:91b305c36573490856e212f9e5645ada81f72ad37f1bb00e6feddc5537252358", size = 12301, upload-time = "2024-02-23T15:53:43.904Z" },
+]
+
+[[package]]
 name = "wagtail-ninja"
-version = "0.1.11"
+version = "0.1.12"
 source = { virtual = "." }
 dependencies = [
     { name = "django-ninja" },
@@ -691,6 +703,7 @@ dev = [
     { name = "icecream" },
     { name = "ruff" },
     { name = "wagtail" },
+    { name = "wagtail-headless-preview" },
 ]
 
 [package.metadata]
@@ -705,6 +718,7 @@ dev = [
     { name = "icecream", specifier = ">=2.1.5" },
     { name = "ruff", specifier = ">=0.12.1" },
     { name = "wagtail", specifier = ">=7.0.1" },
+    { name = "wagtail-headless-preview", specifier = ">=0.8.0" },
 ]
 
 [[package]]

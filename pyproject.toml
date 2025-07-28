@@ -16,4 +16,5 @@ dev = [
     "icecream>=2.1.5",
     "ruff>=0.12.1",
     "wagtail>=7.0.1",
+    "wagtail-headless-preview>=0.8.0",
 ]

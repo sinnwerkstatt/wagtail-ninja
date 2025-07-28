@@ -1,9 +1,11 @@
 import functools
 import operator
+from importlib.util import find_spec
 
 from ninja import ModelSchema, Router, Schema
 
 from django.conf import settings
+from django.contrib.contenttypes.models import ContentType
 from django.http import Http404, HttpRequest
 from django.shortcuts import get_object_or_404, redirect
 from wagtail.contrib.redirects.middleware import get_redirect as wt_get_redirect
@@ -17,6 +19,7 @@ from wagtail_ninja.schema import (
 )
 from wagtail_ninja.typer import create_pages_schemas
 
+from . import WagtailNinjaException
 from ._django_ninja_patch import apply_django_ninja_operation_result_to_response_patch
 
 apply_django_ninja_operation_result_to_response_patch()
@@ -127,6 +130,24 @@ def find_page(request: HttpRequest, html_path, locale=None):
     return redirect(request.build_absolute_uri(f"../{page.id}/"))
 
 
+def get_page_preview(request: HttpRequest, content_type, token):
+    if find_spec("wagtail_headless_preview") is None:
+        raise WagtailNinjaException(">>> wagtail_headless_preview not installed <<<")
+
+    from wagtail_headless_preview.models import PagePreview  # noqa: PLC0415
+
+    app_label, model = content_type.split(".")
+    content_type = ContentType.objects.get(app_label=app_label, model=model)
+
+    page_preview = PagePreview.objects.get(content_type=content_type, token=token)
+    page = page_preview.as_page()
+    if not page.pk:
+        # fake primary key to stop API URL routing from complaining
+        page.pk = 0
+
+    return page
+
+
 class WagtailNinjaPagesRouter(Router):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
@@ -145,6 +166,9 @@ class WagtailNinjaPagesRouter(Router):
             ["GET"],
             find_page,
             response={301: None, 302: None, 404: Http404Response},
+        )
+        self.add_api_operation(
+            "/preview/", ["GET"], get_page_preview, response=WagtailPages
         )
         self.add_api_operation(
             "/{page_id}/",

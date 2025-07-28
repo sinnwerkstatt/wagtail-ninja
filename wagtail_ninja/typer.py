@@ -14,6 +14,7 @@ from django.urls import reverse
 from wagtail import blocks as wagtail_blocks
 from wagtail.api import APIField
 from wagtail.api.v2.utils import get_full_url
+from wagtail.contrib.typed_table_block import blocks as typed_table_block_blocks
 from wagtail.documents.models import Document
 from wagtail.fields import RichTextField, StreamField
 from wagtail.images.models import Image
@@ -111,6 +112,22 @@ def _create_method_resolver(_field: str):
     # return staticmethod(lambda page, context: getattr(page, _field)())
 
 
+# typed_table_block
+class TypedTableColumn(TypedDict):
+    type: str
+    heading: str
+
+
+class TypedTableRow(TypedDict):
+    values: list[Any]
+
+
+class TypedTable(TypedDict):
+    caption: str
+    columns: list[TypedTableColumn]
+    rows: list[TypedTableRow]
+
+
 WAGTAIL_STRUCT_BLOCKS = {}
 
 
@@ -173,6 +190,57 @@ def _wagtail_block_map(block: wagtail_blocks.FieldBlock, ident):
 
             return WAGTAIL_STRUCT_BLOCKS[ident]
 
+        # wagtail.contrib.typed_table_block
+        case typed_table_block_blocks.TypedTableBlock():
+            return TypedTable
+            # columns = None
+            # col_types = []
+            # content_types = []
+            # for block_name, block_type in block.child_blocks.items():
+            #     # ColTypedDict = TypedDict(f"{block_name}Column", {"type": Literal[block_name], "heading": str})
+            #     # if not columns:
+            #     #     columns = ColTypedDict
+            #     #     # columns = TypedDict(f"{block.__class__.__name__}Columns", {"type": Literal[block_name], "heading": str})
+            #     # else:
+            #     #     columns |= ColTypedDict
+            #     col_types.append(block_name)
+            #     content_types.append(_wagtail_block_map(block_type, block_name))
+            # inner_block_types = block.child_blocks
+            # print("MNUSS", inner_block_types)
+            # print(col_types, content_types)
+            # class MyTypeColumn(TypedDict):
+            #     type: str
+            #     heading: str
+            # MyTypeColumn = TypedDict(
+            #     f"{block.__class__.__name__}Column",
+            #     {"type": Literal[[Literal[x] for x in col_types]], "heading": str},
+            # )
+
+            # class TypedTableColumn(TypedDict):
+            #     type: str
+            #     heading: str
+            #
+            # class TypedTableRow(TypedDict):
+            #     values: list[Any]
+            #
+            # return TypedDict(
+            #     f"{block.__class__.__name__}Value",
+            #     {
+            #         "caption": str,
+            #         "columns": list[TypedTableColumn],
+            #         "rows": list[TypedTableRow],
+            #     },
+            # )
+            # return TypedDict(
+            #     f"{block.__class__.__name__}Value",
+            #     {
+            #         "caption": str,
+            #         "columns": list[
+            #             TypedDict("TypedTableColumn", {"type": str, "heading": str})
+            #         ],
+            #         "rows": list[TypedDict("TypedTableRow", {"values": list[Any]})],
+            #     },
+            # )
         case _:
             logger.warning(f"unhandled block type: {block}")
             return Any

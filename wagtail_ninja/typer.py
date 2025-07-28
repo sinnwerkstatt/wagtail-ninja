@@ -3,6 +3,8 @@ import logging
 import sys
 from collections.abc import Callable
 from datetime import date, datetime
+from functools import reduce
+from operator import or_
 from typing import Any, ClassVar, Literal, TypedDict, cast
 
 from ninja import ModelSchema
@@ -173,10 +175,20 @@ def _wagtail_block_map(block: wagtail_blocks.FieldBlock, ident):
         case wagtail_blocks.ListBlock():
             return list[_wagtail_block_map(block.child_block, ident)]
         case wagtail_blocks.StreamBlock():
-            props = {}
-            for name, child in block.child_blocks.items():
-                props[name] = _wagtail_block_map(child, name)
-            return TypedDict(f"{block.__class__.__name__}Value", props)
+            streamblocks = [
+                TypedDict(
+                    f"{block.__class__.__name__}_{name}_Value",
+                    {"type": Literal[name], "value": _wagtail_block_map(child, name)},
+                )
+                for name, child in block.child_blocks.items()
+            ]
+
+            return list[
+                TypedDict(
+                    f"{block.__class__.__name__}Value",
+                    {"value": list[reduce(or_, streamblocks)]},
+                )
+            ]
         case wagtail_blocks.StructBlock():
             if ident not in WAGTAIL_STRUCT_BLOCKS:
                 props = {

@@ -7,6 +7,7 @@ from functools import reduce
 from operator import or_
 from typing import Any, ClassVar, Literal, TypedDict, cast
 
+from modelcluster.contrib.taggit import ClusterTaggableManager
 from ninja import ModelSchema
 
 from django.conf import settings
@@ -86,6 +87,16 @@ def _create_richtext_resolver(_field: str):
 def _create_many_to_one_rel_resolver(_field: str):
     return staticmethod(
         lambda page, context: getattr(page, _field).values_list("id", flat=True)
+    )
+
+
+def _create_cluster_taggable_manager_resolver(_field: str):
+    # def get_tags(page, context):
+    #     return getattr(page, _field).values_list("slug", flat=True)
+    #
+    # return staticmethod(get_tags)
+    return staticmethod(
+        lambda page, context: getattr(page, _field).values_list("slug", flat=True)
     )
 
 
@@ -361,6 +372,13 @@ def _create_page_schema(page_model: Page) -> type[ModelSchema]:
             elif isinstance(model_field, ManyToOneRel):
                 props["__annotations__"][field] = list[int]
                 props[f"resolve_{field}"] = _create_many_to_one_rel_resolver(field)
+                continue  # won't register for Django-field mapping
+
+            elif isinstance(model_field, ClusterTaggableManager):
+                props["__annotations__"][field] = list[str]
+                props[f"resolve_{field}"] = _create_cluster_taggable_manager_resolver(
+                    field
+                )
                 continue  # won't register for Django-field mapping
 
             relevant_fields.append(field)

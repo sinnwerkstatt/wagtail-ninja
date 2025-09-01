@@ -31,6 +31,7 @@ from wagtail_ninja.schema import (
     StreamFieldSchema,
     WagtailDocumentSchema,
     WagtailImageSchema,
+    WagtailTagSchema,
 )
 
 logger = logging.getLogger(__name__)
@@ -96,7 +97,7 @@ def _create_cluster_taggable_manager_resolver(_field: str):
     #
     # return staticmethod(get_tags)
     return staticmethod(
-        lambda page, context: getattr(page, _field).values_list("slug", flat=True)
+        lambda page, context: getattr(page, _field).values("id", "name", "slug")
     )
 
 
@@ -375,7 +376,7 @@ def _create_page_schema(page_model: Page) -> type[ModelSchema]:
                 continue  # won't register for Django-field mapping
 
             elif isinstance(model_field, ClusterTaggableManager):
-                props["__annotations__"][field] = list[str]
+                props["__annotations__"][field] = list[WagtailTagSchema]
                 props[f"resolve_{field}"] = _create_cluster_taggable_manager_resolver(
                     field
                 )

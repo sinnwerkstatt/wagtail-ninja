@@ -150,6 +150,12 @@ class WagtailDocumentSchema(Schema):
     meta: WagtailDocumentMetaSchema
 
 
+class WagtailTagSchema(Schema):
+    id: int
+    name: str
+    slug: str
+
+
 class RedirectSchema(ModelSchema):
     location: str = Field(None, alias="link")
 

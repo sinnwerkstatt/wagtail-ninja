@@ -133,6 +133,7 @@ class WagtailImageMetaSchema(Schema):
 class WagtailImageSchema(Schema):
     id: int
     title: str
+    description: str
     width: int
     height: int
     meta: WagtailImageMetaSchema

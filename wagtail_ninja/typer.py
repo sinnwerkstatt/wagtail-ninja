@@ -20,7 +20,7 @@ from wagtail.api.v2.utils import get_full_url
 from wagtail.contrib.typed_table_block import blocks as typed_table_block_blocks
 from wagtail.documents.models import Document
 from wagtail.fields import RichTextField, StreamField
-from wagtail.images.models import Image
+from wagtail.images.models import AbstractImage
 from wagtail.models import Page, get_page_models
 from wagtail.rich_text import expand_db_html
 
@@ -42,7 +42,7 @@ def serialize_streamfield(sfield: StreamField, context):
     return cntnt
 
 
-def serialize_image(img: Image | None, context):
+def serialize_image(img: AbstractImage | None, context):
     if img is None:
         return None
 
@@ -53,6 +53,7 @@ def serialize_image(img: Image | None, context):
             "download_url": get_full_url(context["request"], img.file.url),
         },
         "title": img.title,
+        "description": img.description,
         "width": img.width,
         "height": img.height,
     }
@@ -362,7 +363,7 @@ def _create_page_schema(page_model: Page) -> type[ModelSchema]:
                 props[f"resolve_{field}"] = _create_richtext_resolver(field)
 
             elif isinstance(model_field, ForeignKey):
-                if issubclass(model_field.related_model, Image):
+                if issubclass(model_field.related_model, AbstractImage):
                     props["__annotations__"][field] = WagtailImageSchema | None
                     props[f"resolve_{field}"] = _create_foreignkey_image_resolver(field)
                 if issubclass(model_field.related_model, Document):

@@ -101,7 +101,7 @@ def get_page_wrapper_fn(all_page_schemas: dict[type[Page], type[ModelSchema]]):
     return get_page
 
 
-def find_page(request: HttpRequest, html_path, locale=None):
+def find_page(request: HttpRequest, html_path: str, locale: str | None = None):
     site = Site.find_for_request(request)
     if not site:
         raise Http404("No site found")

@@ -13,7 +13,8 @@ from django.http.response import HttpResponseBase
 logger = logging.getLogger(__name__)
 
 LIBRARY_NAME = "ninja"
-BUGGED_VERSION_MAX = "1.4.3"  # Patch applies if version is <= this
+BUGGED_VERSION_MIN = "1.4.3"
+BUGGED_VERSION_MAX = "1.4.5"
 
 
 def apply_django_ninja_operation_result_to_response_patch():
@@ -29,7 +30,7 @@ def apply_django_ninja_operation_result_to_response_patch():
             lib_module, "__version__", "0.0.0"
         )  # Get version, default to '0.0.0' if not found
 
-        if lib_version <= BUGGED_VERSION_MAX:
+        if BUGGED_VERSION_MIN <= lib_version <= BUGGED_VERSION_MAX:
             logger.warning(
                 f"Applying patch for {LIBRARY_NAME} version {lib_version}. "
                 # f"Please update to {LIBRARY_NAME}>={FIXED_VERSION_MIN} when available."

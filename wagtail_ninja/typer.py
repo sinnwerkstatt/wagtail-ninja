@@ -17,6 +17,7 @@ from django.urls import reverse
 from wagtail import blocks as wagtail_blocks
 from wagtail.api import APIField
 from wagtail.api.v2.utils import get_full_url
+from wagtail.blocks import StreamBlock
 from wagtail.contrib.typed_table_block import blocks as typed_table_block_blocks
 from wagtail.documents.models import Document
 from wagtail.fields import RichTextField, StreamField
@@ -280,7 +281,15 @@ def _create_streamfield_schema(
     model_field: StreamField, page_model: Page, fieldname: str
 ):
     blocks = None
-    for block_ident, block in model_field.block_types_arg:
+
+    if isinstance(model_field.block_types_arg, StreamBlock):
+        streamblocks = [
+            (k, v) for k, v in model_field.block_types_arg.child_blocks.items()
+        ]
+    else:
+        streamblocks = model_field.block_types_arg
+
+    for block_ident, block in streamblocks:
         if getattr(settings, "WAGTAIL_NINJA_TYPE_STREAMFIELDBLOCKS", None):
             value = _wagtail_block_map(block, block_ident)
         else:

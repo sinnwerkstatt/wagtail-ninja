@@ -87,15 +87,15 @@ class BasePageSchema(Schema):
 
 
 class BasePageModelSchema(BasePageSchema, ModelSchema):
-    class Config:
+    class Meta:
         model = Page
-        model_fields = ["id", "title"]  # noqa: RUF012
+        fields = ["id", "title"]  # noqa: RUF012
 
 
 class BasePageDetailSchema(BasePageModelSchema):
     meta: PageDetailMeta
 
-    class Config(BasePageModelSchema.Config):
+    class Meta(BasePageModelSchema.Meta):
         pass
 
     @staticmethod
@@ -160,6 +160,6 @@ class WagtailTagSchema(Schema):
 class RedirectSchema(ModelSchema):
     location: str = Field(None, alias="link")
 
-    class Config:
+    class Meta:
         model = Redirect
-        model_fields = ["id", "old_path", "is_permanent"]
+        fields = ["id", "old_path", "is_permanent"]

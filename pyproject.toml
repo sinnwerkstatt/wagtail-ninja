@@ -1,12 +1,12 @@
 [project]
 name = "wagtail-ninja"
-version = "0.1.17"
+version = "0.1.18"
 description = "Ninja API for Wagtail"
 requires-python = ">=3.12"
 readme="README.md"
 
 dependencies = [
-    "django-ninja>=1.4.3,<1.5.0",
+    "django-ninja==1.5",
 ]
 
 [dependency-groups]

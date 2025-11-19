@@ -402,13 +402,12 @@ def _create_page_schema(page_model: Page) -> type[ModelSchema]:
                 props["__annotations__"][field] = ret_type
                 props[f"resolve_{field}"] = _create_method_resolver(field)
 
-    cnfg = type(
-        "Config",
-        (BasePageDetailSchema.Config,),
-        {"model": page_model, "model_fields": relevant_fields or ["title"]},
+    props["Meta"] = type(
+        "Meta",
+        (BasePageDetailSchema.Meta,),
+        {"model": page_model, "fields": relevant_fields or ["title"]},
     )
-    props["Config"] = cnfg
-    props["__annotations__"]["Config"] = ClassVar[type]
+    props["__annotations__"]["Meta"] = ClassVar[type]
 
     return cast(
         type[ModelSchema],

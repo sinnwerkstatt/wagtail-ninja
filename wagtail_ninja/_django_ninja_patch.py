@@ -14,7 +14,7 @@ logger = logging.getLogger(__name__)
 
 LIBRARY_NAME = "ninja"
 BUGGED_VERSION_MIN = "1.4.3"
-BUGGED_VERSION_MAX = "1.5.0"
+BUGGED_VERSION_MAX = "1.5.3"
 
 
 def apply_django_ninja_operation_result_to_response_patch():

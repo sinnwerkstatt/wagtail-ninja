@@ -2,6 +2,7 @@ import functools
 import operator
 from importlib.util import find_spec
 
+from django.utils import translation
 from ninja import ModelSchema, Router, Schema
 
 from django.conf import settings
@@ -89,7 +90,7 @@ def get_page_wrapper_fn(all_page_schemas: dict[type[Page], type[ModelSchema]]):
     all_schemas = all_page_schemas.values()
     type WagtailPages = functools.reduce(operator.or_, all_schemas)
 
-    def get_page(request: HttpRequest, page_id: int) -> WagtailPages:
+    def _get_page(request: HttpRequest, page_id: int) -> WagtailPages:
         page = get_object_or_404(Page, id=page_id).specific
 
         for page_type, schema in all_page_schemas.items():
@@ -97,6 +98,14 @@ def get_page_wrapper_fn(all_page_schemas: dict[type[Page], type[ModelSchema]]):
                 return schema.from_orm(page, context={"request": request})
 
         return BasePageDetailSchema.from_orm(page, context={"request": request})
+
+    def get_page(
+        request: HttpRequest, page_id: int, locale: str | None = None
+    ) -> WagtailPages:
+        if locale:
+            with translation.override(locale):
+                return _get_page(request, page_id)
+        return _get_page(request, page_id)
 
     return get_page
 

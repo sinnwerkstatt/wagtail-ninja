@@ -1,7 +1,10 @@
 import importlib
 import logging
+import warnings
 from typing import Any
 
+import pydantic
+from ninja import Status
 from ninja.constants import NOT_SET
 from ninja.errors import ConfigError
 from ninja.operation import ResponseObject
@@ -16,33 +19,21 @@ LIBRARY_NAME = "ninja"
 BUGGED_VERSION_MIN = "1.4.3"
 BUGGED_VERSION_MAX = "1.5.3"
 
+DIFFERENT_PATCH_MIN = "1.6.1"
+DIFFERENT_PATCH_MAX = "1.6.2"
+
 
 def apply_django_ninja_operation_result_to_response_patch():
-    """
-    Applies a patch to some_third_party_lib to fix a specific bug.
-    """
     try:
-        # Dynamically import the library
         lib_module = importlib.import_module(LIBRARY_NAME)
-
-        # Check the version before patching
-        lib_version = getattr(
-            lib_module, "__version__", "0.0.0"
-        )  # Get version, default to '0.0.0' if not found
+        lib_version = getattr(lib_module, "__version__", "0.0.0")
 
         if BUGGED_VERSION_MIN <= lib_version <= BUGGED_VERSION_MAX:
-            logger.warning(
-                f"Applying patch for {LIBRARY_NAME} version {lib_version}. "
-                # f"Please update to {LIBRARY_NAME}>={FIXED_VERSION_MIN} when available."
-            )
+            logger.warning(f"Applying patch for {LIBRARY_NAME} version {lib_version}. ")
 
-            # --- THE ACTUAL MONKEY PATCHING LOGIC GOES HERE ---
-            # Assume the bug is in some_third_party_lib.some_module.SomeClass.problematic_method
             from ninja.operation import Operation
 
-            # original_method = Operation._result_to_response
-
-            def patched_method(
+            def patched_result_to_response(
                 self, request: HttpRequest, result: Any, temporal_response: HttpResponse
             ) -> HttpResponseBase:
                 """
@@ -114,15 +105,93 @@ def apply_django_ninja_operation_result_to_response_patch():
                     request, result, temporal_response=temporal_response
                 )
 
-            # Replace the original method with our patched version
-            Operation._result_to_response = patched_method
-            # --- END OF MONKEY PATCHING LOGIC ---
+            Operation._result_to_response = patched_result_to_response
 
-        # elif lib_version >= FIXED_VERSION_MIN:
-        #     logger.info(
-        #         f"Skipping patch for {LIBRARY_NAME} (version {lib_version} is >= {FIXED_VERSION_MIN}). "
-        #         "The bug is likely fixed."
-        #     )
+        if DIFFERENT_PATCH_MIN <= lib_version <= DIFFERENT_PATCH_MAX:
+            logger.warning(f"Applying patch for {LIBRARY_NAME} version {lib_version}. ")
+
+            from ninja.operation import Operation
+
+            def patched_result_to_response(
+                self, request: HttpRequest, result: Any, temporal_response: HttpResponse
+            ) -> HttpResponseBase:
+                """
+                The protocol for results
+                 - if HttpResponse - returns as is
+                 - if Status object - uses status code + body
+                 - if tuple with 2 elements - means http_code + body (deprecated)
+                 - otherwise it's a body
+                """
+                if isinstance(result, HttpResponseBase):
+                    return result
+
+                status: int = 200
+                if len(self.response_models) == 1:
+                    status = next(iter(self.response_models))
+
+                if isinstance(result, Status):
+                    status = result.status_code
+                    result = result.value
+                elif isinstance(result, tuple) and len(result) == 2:
+                    warnings.warn(
+                        "Returning tuple (status_code, response) is deprecated. "
+                        "Use Status(status_code, response) instead.",
+                        DeprecationWarning,
+                        stacklevel=2,
+                    )
+                    status, result = result
+
+                if status in self.response_models:
+                    response_model = self.response_models[status]
+                elif Ellipsis in self.response_models:
+                    response_model = self.response_models[Ellipsis]
+                else:
+                    raise ConfigError(
+                        f"Schema for status {status} is not set in response"
+                        f" {self.response_models.keys()}"
+                    )
+
+                temporal_response.status_code = status
+
+                if response_model is NOT_SET:
+                    return self.api.create_response(
+                        request, result, temporal_response=temporal_response
+                    )
+
+                if response_model is None:
+                    # Empty response.
+                    return temporal_response
+
+                model_dump_kwargs = self._model_dump_kwargs(request, status)
+
+                # Skip re-validation for pydantic model instances matching the response type
+                if isinstance(result, pydantic.BaseModel):
+                    return self.api.create_response(
+                        request,
+                        result.model_dump(**model_dump_kwargs),
+                        temporal_response=temporal_response,
+                    )
+
+                resp_object = ResponseObject(result)
+                # ^ we need object because getter_dict seems work only with model_validate
+                validated_object = response_model.model_validate(
+                    resp_object, context={"request": request, "response_status": status}
+                )
+
+                result = validated_object.model_dump(
+                    by_alias=self.by_alias,
+                    exclude_unset=self.exclude_unset,
+                    exclude_defaults=self.exclude_defaults,
+                    exclude_none=self.exclude_none,
+                    **model_dump_kwargs,
+                )["response"]
+                return self.api.create_response(
+                    request, result, temporal_response=temporal_response
+                )
+
+
+            Operation._result_to_response = patched_result_to_response
+
 
     except ImportError:
         logger.error(

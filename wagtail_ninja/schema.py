@@ -108,10 +108,14 @@ class BasePageDetailSchema(BasePageModelSchema):
         else:
             parent = None
 
+        page_url = page.get_url(context["request"])
+        if page_url is None:
+            page_url = "/"
+
         return PageDetailMeta(
             type=page.specific_class._meta.label,
             detail_url=get_full_url(context["request"], context["request"].path),
-            html_url=get_full_url(context["request"], page.get_url(context["request"])),
+            html_url=get_full_url(context["request"], page_url),
             slug=page.slug,
             first_published_at=page.first_published_at,
             last_published_at=page.last_published_at,

@@ -189,9 +189,7 @@ def apply_django_ninja_operation_result_to_response_patch():
                     request, result, temporal_response=temporal_response
                 )
 
-
             Operation._result_to_response = patched_result_to_response
-
 
     except ImportError:
         logger.error(

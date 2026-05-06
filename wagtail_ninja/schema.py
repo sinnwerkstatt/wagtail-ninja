@@ -37,7 +37,8 @@ class PageParent(Schema):
         meta = PageParentMeta(
             type=page.specific_class._meta.label,
             detail_url=f"TODO page_id: {page.id}",
-            html_url=get_full_url(context["request"], page.get_url(context["request"])),
+            html_url=get_full_url(context["request"], page.get_url(context["request"]))
+            or "",
         )
         return PageParent(id=page.id, title=page.title, meta=meta)
 
@@ -78,7 +79,8 @@ class BasePageSchema(Schema):
             type=page.specific_class._meta.label,
             detail_url=get_full_url(context["request"], context["request"].path)
             + f"/{page.id}/",  # FIXME this only works when the current path is pages/
-            html_url=get_full_url(context["request"], page.get_url(context["request"])),
+            html_url=get_full_url(context["request"], page.get_url(context["request"]))
+            or "",
             slug=page.slug,
             first_published_at=page.first_published_at,
             last_published_at=page.last_published_at,
@@ -115,7 +117,7 @@ class BasePageDetailSchema(BasePageModelSchema):
         return PageDetailMeta(
             type=page.specific_class._meta.label,
             detail_url=get_full_url(context["request"], context["request"].path),
-            html_url=get_full_url(context["request"], page_url),
+            html_url=get_full_url(context["request"], page_url) or "",
             slug=page.slug,
             first_published_at=page.first_published_at,
             last_published_at=page.last_published_at,

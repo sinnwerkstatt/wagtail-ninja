@@ -34,11 +34,14 @@ class PageParent(Schema):
     @classmethod
     def from_page(cls, page: Page, context) -> "PageParent":
         # reverse("api-1.0.0:get_page", kwargs={"page_id": page.id})
+        page_url = page.get_url(context["request"])
+        if page_url is None:
+            page_url = "/"
+
         meta = PageParentMeta(
             type=page.specific_class._meta.label,
             detail_url=f"TODO page_id: {page.id}",
-            html_url=get_full_url(context["request"], page.get_url(context["request"]))
-            or "",
+            html_url=get_full_url(context["request"], page_url) or "",
         )
         return PageParent(id=page.id, title=page.title, meta=meta)
 
@@ -75,12 +78,15 @@ class BasePageSchema(Schema):
 
     @staticmethod
     def resolve_meta(page: Page, context) -> PageMeta:
+        page_url = page.get_url(context["request"])
+        if page_url is None:
+            page_url = "/"
+
         return PageMeta(
             type=page.specific_class._meta.label,
             detail_url=get_full_url(context["request"], context["request"].path)
             + f"/{page.id}/",  # FIXME this only works when the current path is pages/
-            html_url=get_full_url(context["request"], page.get_url(context["request"]))
-            or "",
+            html_url=get_full_url(context["request"], page_url) or "",
             slug=page.slug,
             first_published_at=page.first_published_at,
             last_published_at=page.last_published_at,

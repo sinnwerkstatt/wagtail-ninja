@@ -2,13 +2,13 @@ import functools
 import operator
 from importlib.util import find_spec
 
-from django.utils import translation
 from ninja import ModelSchema, Router, Schema
 
 from django.conf import settings
 from django.contrib.contenttypes.models import ContentType
 from django.http import Http404, HttpRequest
 from django.shortcuts import get_object_or_404, redirect
+from django.utils import translation
 from wagtail.contrib.redirects.middleware import get_redirect as wt_get_redirect
 from wagtail.contrib.redirects.models import Redirect
 from wagtail.models import Locale, Page, PageViewRestriction, Site
@@ -30,7 +30,7 @@ class Http404Response(Schema):
     detail: str
 
 
-def get_base_queryset(request: HttpRequest):
+def get_base_queryset(request: HttpRequest, type: str | None = None):
     queryset = Page.objects.all().live()
 
     # Exclude pages that the user doesn't have access to
@@ -78,19 +78,17 @@ def get_base_queryset(request: HttpRequest):
         # No sites configured
         queryset = queryset.none()
 
-    if "type" in request.GET:
-        app_label, model_name = request.GET["type"].split(".")
+    if type:
+        app_label, model_name = type.split(".")
         queryset = queryset.filter(
-            content_type__app_label=app_label,
-            content_type__model=model_name.lower()
+            content_type__app_label=app_label, content_type__model=model_name.lower()
         )
-
 
     return queryset
 
 
-def list_pages(request: HttpRequest):
-    qs = get_base_queryset(request)
+def list_pages(request: HttpRequest, type: str | None = None):
+    qs = get_base_queryset(request, type)
     return qs
 
 

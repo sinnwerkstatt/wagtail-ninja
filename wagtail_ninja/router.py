@@ -78,6 +78,14 @@ def get_base_queryset(request: HttpRequest):
         # No sites configured
         queryset = queryset.none()
 
+    if "type" in request.GET:
+        app_label, model_name = request.GET["type"].split(".")
+        queryset = queryset.filter(
+            content_type__app_label=app_label,
+            content_type__model=model_name.lower()
+        )
+
+
     return queryset
 
 

@@ -21,9 +21,9 @@ select = [
     "RUF",
     "UP",
 ]
-#ignore = [
+ignore = [
 #    "C901",
-#    "E501", # line too long 🤷
+    "E501", # line too long 🤷
 #    "E722", # can't deal with all the intentional excepts right now
 #    "N815", # mixedCase situations
 #    "S110", # different rule for bare excepts
@@ -31,7 +31,7 @@ select = [
 #    "S607",
 #    "RUF012", # see https://github.com/astral-sh/ruff/issues/5243
 #    "PLC0415",
-#]
+]
 
 
 [lint.isort]

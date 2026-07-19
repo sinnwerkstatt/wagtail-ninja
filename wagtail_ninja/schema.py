@@ -1,13 +1,20 @@
 import uuid
 from datetime import datetime
-from typing import Any
+from typing import Any, Literal
 
 from ninja import ModelSchema, Schema
 from pydantic import Field, RootModel
 
+from django.urls import reverse
 from wagtail.api.v2.utils import get_full_url
 from wagtail.contrib.redirects.models import Redirect
+from wagtail.documents.models import AbstractDocument
+from wagtail.images.models import AbstractImage
 from wagtail.models import Page
+
+
+class Http404Response(Schema):
+    detail: str
 
 
 class PageMeta(Schema):
@@ -101,6 +108,7 @@ class BasePageModelSchema(BasePageSchema, ModelSchema):
 
 
 class BasePageDetailSchema(BasePageModelSchema):
+    content_type: Literal["basepage"]
     meta: PageDetailMeta
 
     class Meta(BasePageModelSchema.Meta):
@@ -142,13 +150,20 @@ class WagtailImageMetaSchema(Schema):
     download_url: str
 
 
-class WagtailImageSchema(Schema):
+class WagtailImageSchema(ModelSchema):
     id: int
-    title: str
-    description: str
-    width: int
-    height: int
     meta: WagtailImageMetaSchema
+
+    class Meta:
+        model = AbstractImage
+        fields = ["title", "description", "width", "height"]
+
+    @staticmethod
+    def resolve_meta(img: AbstractImage, context) -> WagtailImageMetaSchema:
+        return WagtailImageMetaSchema(
+            type=img.__class__._meta.label,
+            download_url=get_full_url(context["request"], img.file.url),
+        )
 
 
 class WagtailDocumentMetaSchema(Schema):
@@ -157,10 +172,24 @@ class WagtailDocumentMetaSchema(Schema):
     download_url: str
 
 
-class WagtailDocumentSchema(Schema):
+class WagtailDocumentSchema(ModelSchema):
     id: int
-    title: str
+
+    class Meta:
+        model = AbstractDocument
+        fields = ["title"]
+
     meta: WagtailDocumentMetaSchema
+
+    @staticmethod
+    def resolve_meta(doc: AbstractDocument, context) -> WagtailDocumentMetaSchema:
+        return WagtailDocumentMetaSchema(
+            type=doc.__class__._meta.label,
+            download_url=get_full_url(
+                context["request"],
+                reverse("wagtaildocs_serve", args=(doc.id, doc.filename)),
+            ),
+        )
 
 
 class WagtailTagSchema(Schema):

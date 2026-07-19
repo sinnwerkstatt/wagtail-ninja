@@ -1,33 +1,17 @@
-import functools
-import operator
 from importlib.util import find_spec
-
-from ninja import ModelSchema, Router, Schema
 
 from django.conf import settings
 from django.contrib.contenttypes.models import ContentType
 from django.http import Http404, HttpRequest
 from django.shortcuts import get_object_or_404, redirect
-from django.utils import translation
 from wagtail.contrib.redirects.middleware import get_redirect as wt_get_redirect
 from wagtail.contrib.redirects.models import Redirect
 from wagtail.models import Locale, Page, PageViewRestriction, Site
-
-from wagtail_ninja.schema import (
-    BasePageDetailSchema,
-    BasePageModelSchema,
-    RedirectSchema,
-)
-from wagtail_ninja.typer import create_pages_schemas
 
 from . import WagtailNinjaException
 from ._django_ninja_patch import apply_django_ninja_operation_result_to_response_patch
 
 apply_django_ninja_operation_result_to_response_patch()
-
-
-class Http404Response(Schema):
-    detail: str
 
 
 def get_base_queryset(request: HttpRequest, type: str | None = None):
@@ -92,30 +76,6 @@ def list_pages(request: HttpRequest, type: str | None = None):
     return qs
 
 
-def get_page_wrapper_fn(all_page_schemas: dict[type[Page], type[ModelSchema]]):
-    all_schemas = all_page_schemas.values()
-    type WagtailPages = functools.reduce(operator.or_, all_schemas)
-
-    def _get_page(request: HttpRequest, page_id: int) -> WagtailPages:
-        page = get_object_or_404(Page, id=page_id).specific
-
-        for page_type, schema in all_page_schemas.items():
-            if type(page) is page_type:
-                return schema.from_orm(page, context={"request": request})
-
-        return BasePageDetailSchema.from_orm(page, context={"request": request})
-
-    def get_page(
-        request: HttpRequest, page_id: int, locale: str | None = None
-    ) -> WagtailPages:
-        if locale:
-            with translation.override(locale):
-                return _get_page(request, page_id)
-        return _get_page(request, page_id)
-
-    return get_page
-
-
 def find_page(request: HttpRequest, html_path: str, locale: str | None = None):
     site = Site.find_for_request(request)
     if not site:
@@ -163,70 +123,17 @@ def get_page_preview(request: HttpRequest, content_type, token):
     return page
 
 
-class WagtailNinjaPagesRouter(Router):
-    def __init__(self, *args, **kwargs):
-        super().__init__(*args, **kwargs)
-        self._autodetect()
-
-    def _autodetect(self, **kwargs):
-        all_page_schemas = create_pages_schemas()
-        all_schemas = all_page_schemas.values()
-        type WagtailPages = functools.reduce(operator.or_, all_schemas)
-
-        self.add_api_operation(
-            "/", ["GET"], list_pages, response=list[BasePageModelSchema]
-        )
-        self.add_api_operation(
-            "/find/",
-            ["GET"],
-            find_page,
-            response={301: None, 302: None, 404: Http404Response},
-        )
-        self.add_api_operation(
-            "/preview/", ["GET"], get_page_preview, response=WagtailPages
-        )
-        self.add_api_operation(
-            "/{page_id}/",
-            ["GET"],
-            get_page_wrapper_fn(all_page_schemas),
-            response=WagtailPages,
-        )
+def list_redirects(request: HttpRequest):
+    return Redirect.objects.all()
 
 
-class WagtailNinjaRedirectsRouter(Router):
-    def __init__(self, *args, **kwargs):
-        super().__init__(*args, **kwargs)
-        self._autodetect()
+def find_redirect(request: HttpRequest, html_path):
+    _redirect = wt_get_redirect(request, html_path)
+    if _redirect:
+        return _redirect
 
-    @staticmethod
-    def list_redirects(request: HttpRequest):
-        return Redirect.objects.all()
+    raise Http404("No redirect found")
 
-    @staticmethod
-    def find_redirect(request: HttpRequest, html_path):
-        _redirect = wt_get_redirect(request, html_path)
-        if _redirect:
-            return _redirect
 
-        raise Http404("No redirect found")
-
-    @staticmethod
-    def get_redirect(request: HttpRequest, redirect_id: int):
-        return get_object_or_404(Redirect, id=redirect_id)
-
-    def _autodetect(self, **kwargs):
-        self.add_api_operation(
-            "/", ["GET"], self.list_redirects, response=list[RedirectSchema]
-        )
-        self.add_api_operation(
-            "/find/",
-            ["GET"],
-            self.find_redirect,
-            response=RedirectSchema,
-        )
-        self.add_api_operation(
-            "/{redirect_id}/",
-            ["GET"],
-            self.get_redirect,
-            response=RedirectSchema,
-        )
+def get_redirect(request: HttpRequest, redirect_id: int):
+    return get_object_or_404(Redirect, id=redirect_id)

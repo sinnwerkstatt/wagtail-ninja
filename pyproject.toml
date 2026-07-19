@@ -1,13 +1,14 @@
 [project]
 name = "wagtail-ninja"
-version = "0.1.26"
+version = "0.2rc1"
 description = "Ninja API for Wagtail"
-requires-python = ">=3.12"
+requires-python = ">=3.14"
 license = "BSD-3-Clause"
 license-files = ["LICENSE"]
 readme="README.md"
 
 dependencies = [
+    "django",
     "django-ninja>=1.4.3,<=1.7",
 ]
 

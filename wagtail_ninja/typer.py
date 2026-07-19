@@ -1,131 +1,37 @@
+from __future__ import annotations
+
 import inspect
 import logging
-import sys
+import types
 from collections.abc import Callable
-from datetime import date, datetime
-from functools import reduce
-from operator import or_
-from typing import Any, ClassVar, Literal, TypedDict, cast
+from typing import (
+    Any,
+    Literal,
+    TypedDict,
+    Union,
+    get_args,
+    get_origin,
+    get_type_hints,
+)
 
 from modelcluster.contrib.taggit import ClusterTaggableManager
-from ninja import ModelSchema
 
 from django.conf import settings
 from django.core.exceptions import FieldDoesNotExist
 from django.db.models import ForeignKey, ManyToOneRel
-from django.urls import reverse
 from wagtail import blocks as wagtail_blocks
 from wagtail.api import APIField
-from wagtail.api.v2.utils import get_full_url
 from wagtail.blocks import StreamBlock
 from wagtail.contrib.typed_table_block import blocks as typed_table_block_blocks
-from wagtail.documents.models import Document
+from wagtail.documents.models import AbstractDocument
 from wagtail.fields import RichTextField, StreamField
 from wagtail.images.models import AbstractImage
-from wagtail.models import Page, get_page_models
-from wagtail.rich_text import expand_db_html
+from wagtail.models import Page
 
 from wagtail_ninja import WagtailNinjaException
-from wagtail_ninja.schema import (
-    BasePageDetailSchema,
-    StreamBlockSchema,
-    StreamFieldSchema,
-    WagtailDocumentSchema,
-    WagtailImageSchema,
-    WagtailTagSchema,
-)
+from wagtail_ninja._internal_schema import SchemaModel, SchemasModule, State
 
 logger = logging.getLogger(__name__)
-
-
-def serialize_streamfield(sfield: StreamField, context):
-    cntnt = sfield.stream_block.get_api_representation(sfield, context)
-    return cntnt
-
-
-def serialize_image(img: AbstractImage | None, context):
-    if img is None:
-        return None
-
-    return {
-        "id": img.id,
-        "meta": {
-            "type": img.__class__._meta.label,
-            "download_url": get_full_url(context["request"], img.file.url),
-        },
-        "title": img.title,
-        "description": img.description,
-        "width": img.width,
-        "height": img.height,
-    }
-
-
-def serialize_document(doc: Document | None, context):
-    if doc is None:
-        return None
-
-    return {
-        "id": doc.id,
-        "meta": {
-            "type": doc.__class__._meta.label,
-            "download_url": get_full_url(
-                context["request"],
-                reverse("wagtaildocs_serve", args=(doc.id, doc.filename)),
-            ),
-        },
-        "title": doc.title,
-    }
-
-
-def _create_streamfield_resolver(_field: str):
-    return staticmethod(
-        lambda page, context: serialize_streamfield(getattr(page, _field), context)
-    )
-
-
-def _create_richtext_resolver(_field: str):
-    return staticmethod(lambda page, context: expand_db_html(getattr(page, _field)))
-
-
-def _create_many_to_one_rel_resolver(_field: str):
-    return staticmethod(
-        lambda page, context: getattr(page, _field).values_list("id", flat=True)
-    )
-
-
-def _create_cluster_taggable_manager_resolver(_field: str):
-    # def get_tags(page, context):
-    #     return getattr(page, _field).values_list("slug", flat=True)
-    #
-    # return staticmethod(get_tags)
-    return staticmethod(
-        lambda page, context: getattr(page, _field).values("id", "name", "slug")
-    )
-
-
-def _create_foreignkey_image_resolver(_field: str):
-    return staticmethod(
-        lambda page, context: serialize_image(getattr(page, _field), context)
-    )
-
-
-def _create_foreignkey_document_resolver(_field: str):
-    return staticmethod(
-        lambda page, context: serialize_document(getattr(page, _field), context)
-    )
-
-
-def _create_method_resolver(_field: str):
-    def fn_call(page, context):
-        fn = getattr(page, _field)
-
-        if isinstance(getattr(type(page), _field, None), property):
-            return fn
-
-        return fn()
-
-    return staticmethod(fn_call)
-    # return staticmethod(lambda page, context: getattr(page, _field)())
 
 
 # typed_table_block
@@ -147,12 +53,13 @@ class TypedTable(TypedDict):
 WAGTAIL_STRUCT_BLOCKS = {}
 
 
-def _wagtail_block_map(block: wagtail_blocks.FieldBlock, ident):
-    # check if the block has get_api_repr first
+def new_block_map(block: wagtail_blocks.FieldBlock, more_class_defs, imports):
+    # check if the block has get_api_representation first
     get_api_rep_fn = getattr(block, "get_api_representation", None)
     if get_api_rep_fn and callable(get_api_rep_fn):
-        signature = inspect.signature(get_api_rep_fn)
-        return_annotation = signature.return_annotation
+        hints = get_type_hints(get_api_rep_fn)
+        return_annotation = hints.get("return", inspect._empty)
+
         if return_annotation is not inspect._empty:
             return return_annotation
 
@@ -161,6 +68,7 @@ def _wagtail_block_map(block: wagtail_blocks.FieldBlock, ident):
             if callable(_type_fn):
                 return _type_fn()
 
+    postfix = "" if block.required else " | None"
     match block:
         case (
             wagtail_blocks.CharBlock()
@@ -169,52 +77,65 @@ def _wagtail_block_map(block: wagtail_blocks.FieldBlock, ident):
             | wagtail_blocks.EmailBlock()
             | wagtail_blocks.URLBlock()
         ):
-            if ident not in WAGTAIL_STRUCT_BLOCKS:
-                WAGTAIL_STRUCT_BLOCKS[ident] = str
-            return WAGTAIL_STRUCT_BLOCKS[ident]
+            return "str" + postfix
         case wagtail_blocks.ChoiceBlock():
             return Literal.__getitem__(
                 tuple(choice[0] for choice in block.field.choices)
             )
         case wagtail_blocks.BooleanBlock():
-            return bool
+            return "bool" + postfix
         case wagtail_blocks.IntegerBlock():
-            return int
+            return "int" + postfix
         case wagtail_blocks.FloatBlock():
-            return float
+            return "float" + postfix
         case wagtail_blocks.DateBlock():
-            return date
+            return "date" + postfix
         case wagtail_blocks.DateTimeBlock():
-            return datetime
+            return "datetime" + postfix
         case wagtail_blocks.ListBlock():
-            return list[_wagtail_block_map(block.child_block, ident)]
+            return f"list[{new_block_map(block.child_block, more_class_defs, imports)}]"
         case wagtail_blocks.StreamBlock():
-            streamblocks = [
-                TypedDict(
-                    f"{block.__class__.__name__}_{name}_Value",
-                    {"type": Literal[name], "value": _wagtail_block_map(child, name)},
-                )
-                for name, child in block.child_blocks.items()
-            ]
+            return "Any"
+            print("STREAMBLOCK")
 
-            return list[
-                TypedDict(
-                    f"{block.__class__.__name__}Value",
-                    {"value": list[reduce(or_, streamblocks)]},
-                )
-            ]
-        case wagtail_blocks.StructBlock():
-            if ident not in WAGTAIL_STRUCT_BLOCKS:
+            print(block)
+            print(block.child_blocks.items())
+            if block.name == "zutaten":
+                print("SCHRITT")
                 props = {
-                    name: _wagtail_block_map(child, name)
+                    name: new_block_map(child, more_class_defs, imports)
                     for name, child in block.child_blocks.items()
                 }
+                print(props)
 
-                WAGTAIL_STRUCT_BLOCKS[ident] = TypedDict(
-                    f"{block.__class__.__name__}Value", props
-                )
+            # streamblocks = [
+            #     TypedDict(
+            #         f"{block.__class__.__name__}_{name}_Value",
+            #         {"type": Literal[name], "value": _wagtail_block_map(child, name)},
+            #     )
+            #     for name, child in block.child_blocks.items()
+            # ]
+            #
+            # return list[
+            #     TypedDict(
+            #         f"{block.__class__.__name__}Value",
+            #         {"value": list[reduce(or_, streamblocks)]},
+            #     )
+            # ]
+        case wagtail_blocks.StructBlock():
+            # print("STRUCTBLOCK")
+            # print(block)
 
-            return WAGTAIL_STRUCT_BLOCKS[ident]
+            props = {
+                name: new_block_map(child, more_class_defs, imports)
+                for name, child in block.child_blocks.items()
+            }
+            more_class_defs += [f"class {block.__class__.__name__}Value(Schema):"]
+            more_class_defs += [f"    {x}: {y}" for x, y in props.items()]
+            return f"{block.__class__.__name__}Value"
+
+        case wagtail_blocks.StaticBlock():
+            return "None"
 
         # wagtail.contrib.typed_table_block
         case typed_table_block_blocks.TypedTableBlock():
@@ -267,9 +188,10 @@ def _wagtail_block_map(block: wagtail_blocks.FieldBlock, ident):
             #         "rows": list[TypedDict("TypedTableRow", {"values": list[Any]})],
             #     },
             # )
+
         case _:
             logger.warning(f"unhandled block type: {block}")
-            return Any
+            return "Any"
 
 
 WAGTAIL_STREAMFIELD_TYPES = {}
@@ -277,54 +199,13 @@ WAGTAIL_STREAMFIELD_TYPES = {}
 WAGTAIL_BLOCK_TYPES = {}
 
 
-def _create_streamfield_schema(
-    model_field: StreamField, page_model: Page, fieldname: str
-):
-    blocks = None
-
-    if isinstance(model_field.block_types_arg, StreamBlock):
-        streamblocks = [
-            (k, v) for k, v in model_field.block_types_arg.child_blocks.items()
-        ]
-    else:
-        streamblocks = model_field.block_types_arg
-
-    for block_ident, block in streamblocks:
-        if getattr(settings, "WAGTAIL_NINJA_TYPE_STREAMFIELDBLOCKS", None):
-            value = _wagtail_block_map(block, block_ident)
-        else:
-            value = Any
-
-        if (block_ident, value) not in WAGTAIL_BLOCK_TYPES:
-            WAGTAIL_BLOCK_TYPES[(block_ident, value)] = type(
-                block.__class__.__name__,
-                (StreamBlockSchema,),
-                {"__annotations__": {"type": Literal[block_ident], "value": value}},
-            )
-        if blocks:
-            blocks |= WAGTAIL_BLOCK_TYPES[(block_ident, value)]
-        else:
-            blocks = WAGTAIL_BLOCK_TYPES[(block_ident, value)]
-
-    if WAGTAIL_STREAMFIELD_TYPES.get(blocks):
-        return WAGTAIL_STREAMFIELD_TYPES[blocks]
-
-    custom_stream_field = type(
-        f"{page_model.__name__}.{fieldname}.StreamField",
-        (StreamFieldSchema,),
-        {"__annotations__": {"root": list[blocks]}},
-    )
-    WAGTAIL_STREAMFIELD_TYPES[blocks] = custom_stream_field
-    # print(WAGTAIL_STREAMFIELD_TYPES)
-    return custom_stream_field
-
-
 def _get_method_annotations(fnc: Callable | property):
     if isinstance(fnc, property):
-        signature = inspect.signature(fnc.fget)
+        hints = get_type_hints(fnc.fget)
     else:
-        signature = inspect.signature(fnc)
-    return_annotation = signature.return_annotation
+        hints = get_type_hints(fnc)
+
+    return_annotation = hints.get("return", inspect._empty)
 
     _type_fn = getattr(fnc, "_wagtail_ninja_type_fn", None)
 
@@ -337,13 +218,82 @@ def _get_method_annotations(fnc: Callable | property):
     return ret_type
 
 
-def _create_page_schema(page_model: Page) -> type[ModelSchema]:
-    props: dict[Any, Any] = {
-        "__module__": sys.modules[__name__].__name__,
-        "__annotations__": {"content_type": Literal[page_model._meta.label]},
-    }
+global_known_blocks = {}
 
+
+def big_stream_resolver(model_field, imports: set[str], state):
+    ret = []
+    if isinstance(model_field.block_types_arg, StreamBlock):
+        streamblocks = [
+            (k, v) for k, v in model_field.block_types_arg.child_blocks.items()
+        ]
+    else:
+        streamblocks = model_field.block_types_arg
+
+    blocknames = []
+
+    for block in streamblocks:
+        if inspect.isclass(block[1]):
+            current_block_class = block[1]
+        else:
+            current_block_class = block[1].__class__
+
+        blockname = f"Gen{current_block_class.__name__}BlockSchema"
+
+        if block[0] in global_known_blocks:
+            former_block_class = global_known_blocks[block[0]]
+
+            if former_block_class is not current_block_class:
+                x1 = inspect.getfile(former_block_class)
+                x2 = inspect.getfile(current_block_class)
+
+                raise Exception(
+                    f"Block {block[0]} is defined twice with different types. This is not supported yet.\n"
+                    f"{former_block_class} {x1}\n"
+                    f"{block[1]} {x2}"
+                )
+
+        else:
+            more_class_defs = []
+            _val = _resolve_type_and_imports(
+                new_block_map(block[1], more_class_defs, imports),
+                state.schemas_init.imports,
+            )
+
+            if more_class_defs:
+                state.schemas_init.block_defs += more_class_defs
+            state.schemas_init.block_defs += [
+                f"class {blockname}(Schema):\n"
+                f'    type: Literal["{block[0]}"]\n'
+                f"    value: {_val}"
+                # f"    value: Any"
+            ]
+
+            state.schemas_init.imports.add("import typing")
+
+            global_known_blocks[block[0]] = current_block_class
+
+        blocknames.append(f"{blockname}")
+
+    if len(streamblocks) == 1:
+        imports.add(f"from {state.modpath}.schemas import {blocknames[0]}")
+        return f"list[{blocknames[0]}]", "\n".join(ret)
+
+    imports.add(f"from {state.modpath}.schemas import {','.join(blocknames)}")
+    return (
+        f'list[Annotated[{"|".join(blocknames)}, Field(discriminator="type")]]',
+        "\n".join(ret),
+    )
+
+
+def derive_annotations_and_resolvers(
+    page_model: Page, state: State, schemas_module: SchemasModule
+):
+    extra_schemas = []
     relevant_fields = []
+    field_annotations = []
+    resolvers = []
+    imports = set()
     for field in getattr(page_model, "api_fields", []):
         if isinstance(field, APIField):
             if field.serializer:
@@ -357,39 +307,78 @@ def _create_page_schema(page_model: Page) -> type[ModelSchema]:
             if (
                 resolve_fn := getattr(page_model, f"resolve_{field}", None)
             ) and callable(resolve_fn):
-                props["__annotations__"][field] = _get_method_annotations(resolve_fn)
-                props[f"resolve_{field}"] = _create_method_resolver(f"resolve_{field}")
+                raise NotImplementedError("resolve_fn not supported yet")
+                # props["__annotations__"][field] = _get_method_annotations(resolve_fn)
+                # props[f"resolve_{field}"] = _create_method_resolver(f"resolve_{field}")
                 continue  # won't register for Django-field mapping
 
             elif isinstance(model_field, StreamField):
-                props["__annotations__"][field] = _create_streamfield_schema(
-                    model_field, page_model, field
-                )
-                props[f"resolve_{field}"] = _create_streamfield_resolver(field)
+                xtype, _xtra_schemas = big_stream_resolver(model_field, imports, state)
+                extra_schemas += [_xtra_schemas]
+                field_annotations += [f"{field}: {xtype}"]
+
+                resolvers += [
+                    f"@staticmethod\n"
+                    f"    def resolve_{field}(page, context):\n"
+                    f"        return page.{field}.stream_block.get_api_representation(page.{field},context)"
+                ]
+                imports.add("from ninja import Schema")
+                imports.add("from typing import Annotated")
+                imports.add("from pydantic import RootModel")
 
             elif isinstance(model_field, RichTextField):
-                props["__annotations__"][field] = str
-                props[f"resolve_{field}"] = _create_richtext_resolver(field)
+                field_annotations += [
+                    f"{field}: str = Field(title='{model_field.verbose_name}',description='{model_field.help_text}')"
+                ]
+                resolvers += [
+                    f"@staticmethod\n"
+                    f"    def resolve_{field}(page) -> str:\n"
+                    f"        return expand_db_html(page.{field})"
+                ]
+                imports.add("from wagtail.rich_text import expand_db_html")
 
             elif isinstance(model_field, ForeignKey):
                 if issubclass(model_field.related_model, AbstractImage):
-                    props["__annotations__"][field] = WagtailImageSchema | None
-                    props[f"resolve_{field}"] = _create_foreignkey_image_resolver(field)
-                if issubclass(model_field.related_model, Document):
-                    props["__annotations__"][field] = WagtailDocumentSchema | None
-                    props[f"resolve_{field}"] = _create_foreignkey_document_resolver(
-                        field
+                    field_annotations += [
+                        f"{field}: WagtailImageSchema | None = Field(title='{model_field.verbose_name}',description='{model_field.help_text}')"
+                    ]
+                    if hasattr(settings, "WAGTAILIMAGES_IMAGE_MODEL"):
+                        imports.add(
+                            f"from {state.modpath}.schemas import WagtailImageSchema"
+                        )
+                    else:
+                        imports.add(
+                            "from wagtail_ninja.schema import WagtailImageSchema"
+                        )
+
+                if issubclass(model_field.related_model, AbstractDocument):
+                    field_annotations += [
+                        f"{field}: WagtailDocumentSchema | None = Field(title='{model_field.verbose_name}',description='{model_field.help_text}')"
+                    ]
+                    imports.add(
+                        "from wagtail_ninja.schema import WagtailDocumentSchema"
                     )
             elif isinstance(model_field, ManyToOneRel):
-                props["__annotations__"][field] = list[int]
-                props[f"resolve_{field}"] = _create_many_to_one_rel_resolver(field)
+                field_annotations += [
+                    f"{field}: list[int] = Field(title='{model_field.verbose_name}', description='{model_field.help_text}')"
+                ]
+                resolvers += [
+                    f"@staticmethod\n"
+                    f"    def resolve_{field}(page) -> str:\n"
+                    f'        return page.{field}.values_list("id", flat=True)',
+                ]
                 continue  # won't register for Django-field mapping
 
             elif isinstance(model_field, ClusterTaggableManager):
-                props["__annotations__"][field] = list[WagtailTagSchema]
-                props[f"resolve_{field}"] = _create_cluster_taggable_manager_resolver(
-                    field
-                )
+                field_annotations += [f"{field}: list[WagtailTagSchema]"]
+
+                resolvers += [
+                    f"@staticmethod\n"
+                    f"    def resolve_{field}(page) -> str:\n"
+                    f'        return page.{field}.values("id", "name", "slug")',
+                ]
+                imports.add("from wagtail_ninja.schema import WagtailTagSchema")
+
                 continue  # won't register for Django-field mapping
 
             relevant_fields.append(field)
@@ -399,29 +388,83 @@ def _create_page_schema(page_model: Page) -> type[ModelSchema]:
 
             if isinstance(ex_fnc, Callable | property):
                 ret_type = _get_method_annotations(ex_fnc)
-                props["__annotations__"][field] = ret_type
-                props[f"resolve_{field}"] = _create_method_resolver(field)
+                new_ret_type = _resolve_type_and_imports(ret_type, imports)
 
-    props["Meta"] = type(
-        "Meta",
-        (BasePageDetailSchema.Meta,),
-        {"model": page_model, "fields": relevant_fields or ["title"]},
+                field_annotations += [f"{field}: {new_ret_type}"]
+
+                if isinstance(ex_fnc, property):
+                    resolvers += [
+                        f"@staticmethod\n"
+                        f"    def resolve_{field}(page):\n"
+                        f"        return page.{field}"
+                    ]
+                else:
+                    resolvers += [
+                        f"@staticmethod\n"
+                        f"    def resolve_{field}(page):\n"
+                        f"        return page.{field}()"
+                    ]
+
+    schemas_module.models.append(
+        SchemaModel(
+            name=page_model.__name__,
+            fields=relevant_fields or ["title"],
+            annotations=field_annotations,
+            resolvers=resolvers,
+            extra_schemas=extra_schemas,
+        )
     )
-    props["__annotations__"]["Meta"] = ClassVar[type]
-
-    return cast(
-        type[ModelSchema],
-        type(str(page_model.__name__), (BasePageDetailSchema, ModelSchema), props),
-    )
+    schemas_module.imports.update(imports)
 
 
-def create_pages_schemas() -> dict[type[Page], type[ModelSchema]]:
-    schemas: dict[type[Page], type[ModelSchema]] = {}
-    for model in get_page_models():
-        if model == Page:
-            continue
+def _resolve_type_and_imports(annotation: Any, imports: set) -> str:
+    if isinstance(annotation, str):
+        return annotation
 
-        page_schema = _create_page_schema(model)
-        schemas[model] = page_schema
+    if annotation is inspect._empty:
+        imports.add("from typing import Any")
+        return "Any"
 
-    return schemas
+    if annotation is Any:
+        imports.add("from typing import Any")
+        return "Any"
+
+    if annotation is type(None):
+        return "None"
+
+    if annotation is Literal:
+        return annotation
+
+    origin = get_origin(annotation)
+    args = get_args(annotation)
+
+    if origin is None:
+        if isinstance(annotation, str):
+            return annotation
+
+        mod = getattr(annotation, "__module__", "")
+        name = getattr(annotation, "__name__", str(annotation))
+
+        if mod and mod != "builtins":
+            imports.add(f"from {mod} import {name}")
+
+        return name
+
+    if origin is Union or origin is types.UnionType:
+        formatted_args = [_resolve_type_and_imports(arg, imports) for arg in args]
+        return " | ".join(formatted_args)
+
+    origin_mod = getattr(origin, "__module__", "")
+    origin_name = getattr(origin, "__name__", str(origin))
+
+    # Handle custom generics or typing structures (like List)
+    if origin_mod and origin_mod not in ("builtins", "typing"):
+        imports.add(f"from {origin_mod} import {origin_name}")
+
+    # Format inner arguments inside the brackets
+
+    if args:
+        formatted_args = [_resolve_type_and_imports(arg, imports) for arg in args]
+        return f"{origin_name}[{', '.join(formatted_args)}]"
+
+    return origin_name

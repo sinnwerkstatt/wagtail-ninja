@@ -16,7 +16,7 @@ class SchemasInit(BaseModel):
 
 class ApiPair(BaseModel):
     model: str
-    schema: str
+    schema_name: str
 
 
 class ApiApp(BaseModel):

@@ -85,7 +85,7 @@ class Command(BaseCommand):
 
                 model_name = model.__name__
                 api_pairs.append(
-                    ApiPair(model=model_name, schema=f"Gen{model_name}Schema")
+                    ApiPair(model=model_name, schema_name=f"Gen{model_name}Schema")
                 )
 
             with open(output_path, "w") as f:

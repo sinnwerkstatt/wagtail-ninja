@@ -264,7 +264,7 @@ def big_stream_resolver(model_field, imports: set[str], state):
                 state.schemas_init.block_defs += more_class_defs
             state.schemas_init.block_defs += [
                 f"class {blockname}(Schema):\n"
-                f'    id: str'
+                f'    id: str\n'
                 f'    type: Literal["{block[0]}"]\n'
                 f"    value: {_val}"
                 # f"    value: Any"

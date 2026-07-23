@@ -9,8 +9,11 @@ class SchemasInit(BaseModel):
         "from ninja import Schema",
         "from typing import Any",
         "from typing import Literal",
+        "from typing import Annotated",
+        "from pydantic import Field",
     }
     block_defs: list[str] = []
+    block_names: set[str] = set()
     image_model: str | None = None
 
 

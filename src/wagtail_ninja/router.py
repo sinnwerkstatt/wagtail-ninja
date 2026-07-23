@@ -23,6 +23,10 @@ def get_base_queryset(request: HttpRequest, type: str | None = None):
         for restriction in PageViewRestriction.objects.all().select_related("page")
         if not restriction.accept_request(request)
     ]
+
+    # print(restricted_pages)
+    # TODO run a 401 unauthorized with "pw-restricted" info
+
     for restricted_page in restricted_pages:
         queryset = queryset.not_descendant_of(restricted_page, inclusive=True)
 

@@ -1,6 +1,6 @@
 [project]
 name = "wagtail-ninja"
-version = "0.2b1"
+version = "0.2b2"
 description = "Ninja API for Wagtail"
 requires-python = ">=3.14"
 license = "BSD-3-Clause"
@@ -21,3 +21,8 @@ dev = [
     "wagtail>=7.0.1",
     "wagtail-headless-preview>=0.8.0",
 ]
+
+
+[build-system]
+requires = ["uv_build>=0.9.18,<0.10.0"]
+build-backend = "uv_build"

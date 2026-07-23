@@ -30,3 +30,5 @@ class WagtailImageSchema(ModelSchema):
 {% for block_def in state.schemas_init.block_defs %}
 {{ block_def|safe }}
 {% endfor %}
+
+GenStreamfieldBlock = Annotated[{{ state.schemas_init.block_names|join:"|" }}, Field(discriminator="type")]

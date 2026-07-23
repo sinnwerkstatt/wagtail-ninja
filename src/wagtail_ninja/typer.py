@@ -238,7 +238,7 @@ def big_stream_resolver(model_field, imports: set[str], state):
         else:
             current_block_class = block[1].__class__
 
-        blockname = f"Gen{current_block_class.__name__}BlockSchema"
+        blockname = f"Gen{current_block_class.__name__}Schema"
 
         if block[0] in global_known_blocks:
             former_block_class = global_known_blocks[block[0]]
@@ -280,6 +280,9 @@ def big_stream_resolver(model_field, imports: set[str], state):
         return f"list[{blocknames[0]}]", "\n".join(ret)
 
     imports.add(f"from {state.modpath}.schemas import {','.join(blocknames)}")
+
+    state.schemas_init.block_names.update(blocknames)
+
     return (
         f'list[Annotated[{"|".join(blocknames)}, Field(discriminator="type")]]',
         "\n".join(ret),

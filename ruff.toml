@@ -51,3 +51,7 @@ section-order = [
 
 ]
 
+[lint.per-file-ignores]
+"tests/**.py" = ["ALL"]
+
+

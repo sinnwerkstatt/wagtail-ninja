@@ -1,6 +1,12 @@
 from pathlib import Path
+from typing import Any
 
 from pydantic import BaseModel
+
+
+class BlockDef(BaseModel):
+    model: Any
+    definition: str
 
 
 class SchemasInit(BaseModel):
@@ -12,9 +18,19 @@ class SchemasInit(BaseModel):
         "from typing import Annotated",
         "from pydantic import Field",
     }
-    block_defs: list[str] = []
+    stream_blocks: dict[str, BlockDef] = {}
+    struct_blocks: dict[str, BlockDef] = {}
     block_names: set[str] = set()
     image_model: str | None = None
+
+    def structblock_defs(self):
+        return [x.definition for x in self.struct_blocks.values()]
+
+    def block_defs(self):
+        return [x.definition for x in self.stream_blocks.values()]
+
+    def sorted_block_names(self):
+        return "|".join(sorted(self.block_names))
 
 
 class ApiPair(BaseModel):

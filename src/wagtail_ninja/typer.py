@@ -29,7 +29,7 @@ from wagtail.images.models import AbstractImage
 from wagtail.models import Page
 
 from wagtail_ninja import WagtailNinjaException
-from wagtail_ninja._internal_schema import SchemaModel, SchemasModule, State
+from wagtail_ninja._internal_schema import BlockDef, SchemaModel, SchemasModule, State
 
 logger = logging.getLogger(__name__)
 
@@ -50,10 +50,7 @@ class TypedTable(TypedDict):
     rows: list[TypedTableRow]
 
 
-WAGTAIL_STRUCT_BLOCKS = {}
-
-
-def new_block_map(block: wagtail_blocks.FieldBlock, more_class_defs, imports):
+def new_block_map(block: wagtail_blocks.Block, imports, state: State):
     # check if the block has get_api_representation first
     get_api_rep_fn = getattr(block, "get_api_representation", None)
     if get_api_rep_fn and callable(get_api_rep_fn):
@@ -68,7 +65,7 @@ def new_block_map(block: wagtail_blocks.FieldBlock, more_class_defs, imports):
             if callable(_type_fn):
                 return _type_fn()
 
-    postfix = "" if block.required else " | None"
+    suffix = "" if block.required else " | None"
     match block:
         case (
             wagtail_blocks.CharBlock()
@@ -77,152 +74,115 @@ def new_block_map(block: wagtail_blocks.FieldBlock, more_class_defs, imports):
             | wagtail_blocks.EmailBlock()
             | wagtail_blocks.URLBlock()
         ):
-            return "str" + postfix
+            return "str" + suffix
         case wagtail_blocks.ChoiceBlock():
-            return Literal.__getitem__(
-                tuple(choice[0] for choice in block.field.choices)
-            )
-        case wagtail_blocks.BooleanBlock():
-            return "bool" + postfix
-        case wagtail_blocks.IntegerBlock():
-            return "int" + postfix
-        case wagtail_blocks.FloatBlock():
-            return "float" + postfix
-        case wagtail_blocks.DateBlock():
-            return "date" + postfix
-        case wagtail_blocks.DateTimeBlock():
-            return "datetime" + postfix
-        case wagtail_blocks.ListBlock():
-            return f"list[{new_block_map(block.child_block, more_class_defs, imports)}]"
-        case wagtail_blocks.StreamBlock():
-            return "Any"
-            print("STREAMBLOCK")
+            return f"Literal[{','.join(f'"{choice[0]}"' for choice in block.field.choices)}]"
 
-            print(block)
-            print(block.child_blocks.items())
-            if block.name == "zutaten":
-                print("SCHRITT")
+        case wagtail_blocks.BooleanBlock():
+            return "bool" + suffix
+        case wagtail_blocks.IntegerBlock():
+            return "int" + suffix
+        case wagtail_blocks.FloatBlock():
+            return "float" + suffix
+        case wagtail_blocks.DateBlock():
+            return "date" + suffix
+        case wagtail_blocks.DateTimeBlock():
+            return "datetime" + suffix
+        case wagtail_blocks.ListBlock():
+            return f"list[{new_block_map(block.child_block, imports, state)}]"
+        case wagtail_blocks.StreamBlock():
+            current_block_class = block.__class__
+
+            blocknames = []
+            for name, child in block.child_blocks.items():
+                blockname = f"Gen{child.__class__.__name__}Schema"
+
+                if existing_block := state.schemas_init.stream_blocks.get(child.__class__.__name__):
+                    if child.__class__ is not existing_block.model:
+                        x1 = inspect.getfile(existing_block.model)
+                        x2 = inspect.getfile(child.__class__)
+
+                        raise Exception(
+                            f"Block {name} is defined twice with different types. This is not supported yet.\n"
+                            f"{existing_block.model} {x1}\n"
+                            f"{child} {x2}"
+                        )
+                else:
+                    resolved = _resolve_type_and_imports(
+                        new_block_map(child, imports, state),
+                        state.schemas_init.imports,
+                    )
+                    
+
+                    state.schemas_init.stream_blocks[child.__class__.__name__] = BlockDef(
+                        model=child.__class__,
+                        definition=(
+                            f"class {blockname}(Schema):\n"
+                            f"    id: str\n"
+                            f"    type: Literal['{name}']\n"
+                            f"    value: {resolved}\n"
+                        ),
+                    )
+                blocknames.append(f"{blockname}")
+
+            return f'list[Annotated[{"|".join(blocknames)}, Field(discriminator="type")]]'
+
+        case wagtail_blocks.StructBlock():
+            current_block_class = block.__class__
+
+            if existing_block := state.schemas_init.struct_blocks.get(
+                current_block_class.__name__
+            ):
+                if current_block_class is not existing_block.model:
+                    x1 = inspect.getfile(existing_block.model)
+                    x2 = inspect.getfile(current_block_class)
+
+                    raise Exception(
+                        f"Block is defined twice with different types. This is not supported yet.\n"
+                        f"{existing_block.model} {x1}\n"
+                        f"{block} {x2}"
+                    )
+            else:
                 props = {
-                    name: new_block_map(child, more_class_defs, imports)
+                    name: _resolve_type_and_imports(
+                        new_block_map(child, imports, state),
+                        state.schemas_init.imports,
+                    )
                     for name, child in block.child_blocks.items()
                 }
-                print(props)
 
-            # streamblocks = [
-            #     TypedDict(
-            #         f"{block.__class__.__name__}_{name}_Value",
-            #         {"type": Literal[name], "value": _wagtail_block_map(child, name)},
-            #     )
-            #     for name, child in block.child_blocks.items()
-            # ]
-            #
-            # return list[
-            #     TypedDict(
-            #         f"{block.__class__.__name__}Value",
-            #         {"value": list[reduce(or_, streamblocks)]},
-            #     )
-            # ]
-        case wagtail_blocks.StructBlock():
-            # print("STRUCTBLOCK")
-            # print(block)
+                state.schemas_init.struct_blocks[current_block_class.__name__] = (
+                    BlockDef(
+                        model=current_block_class,
+                        definition=(
+                            "\n".join(
+                                [
+                                    f"class {current_block_class.__name__}Value(Schema):",
+                                    *[f"    {x}: {y}" for x, y in props.items()],
+                                ]
+                            )
+                        ),
+                    )
+                )
 
-            props = {
-                name: new_block_map(child, more_class_defs, imports)
-                for name, child in block.child_blocks.items()
-            }
-            more_class_defs += [f"class {block.__class__.__name__}Value(Schema):"]
-            more_class_defs += [f"    {x}: {y}" for x, y in props.items()]
-            return f"{block.__class__.__name__}Value"
+            return f"{current_block_class.__name__}Value"
 
         case wagtail_blocks.StaticBlock():
             return "None"
 
-        # wagtail.contrib.typed_table_block
         case typed_table_block_blocks.TypedTableBlock():
+            # wagtail.contrib.typed_table_block
             return TypedTable
-            # columns = None
-            # col_types = []
-            # content_types = []
-            # for block_name, block_type in block.child_blocks.items():
-            #     # ColTypedDict = TypedDict(f"{block_name}Column", {"type": Literal[block_name], "heading": str})
-            #     # if not columns:
-            #     #     columns = ColTypedDict
-            #     #     # columns = TypedDict(f"{block.__class__.__name__}Columns", {"type": Literal[block_name], "heading": str})
-            #     # else:
-            #     #     columns |= ColTypedDict
-            #     col_types.append(block_name)
-            #     content_types.append(_wagtail_block_map(block_type, block_name))
-            # inner_block_types = block.child_blocks
-            # print("MNUSS", inner_block_types)
-            # print(col_types, content_types)
-            # class MyTypeColumn(TypedDict):
-            #     type: str
-            #     heading: str
-            # MyTypeColumn = TypedDict(
-            #     f"{block.__class__.__name__}Column",
-            #     {"type": Literal[[Literal[x] for x in col_types]], "heading": str},
-            # )
-
-            # class TypedTableColumn(TypedDict):
-            #     type: str
-            #     heading: str
-            #
-            # class TypedTableRow(TypedDict):
-            #     values: list[Any]
-            #
-            # return TypedDict(
-            #     f"{block.__class__.__name__}Value",
-            #     {
-            #         "caption": str,
-            #         "columns": list[TypedTableColumn],
-            #         "rows": list[TypedTableRow],
-            #     },
-            # )
-            # return TypedDict(
-            #     f"{block.__class__.__name__}Value",
-            #     {
-            #         "caption": str,
-            #         "columns": list[
-            #             TypedDict("TypedTableColumn", {"type": str, "heading": str})
-            #         ],
-            #         "rows": list[TypedDict("TypedTableRow", {"values": list[Any]})],
-            #     },
-            # )
 
         case _:
             logger.warning(f"unhandled block type: {block}")
             return "Any"
 
 
-WAGTAIL_STREAMFIELD_TYPES = {}
-
-WAGTAIL_BLOCK_TYPES = {}
-
-
-def _get_method_annotations(fnc: Callable | property):
-    if isinstance(fnc, property):
-        hints = get_type_hints(fnc.fget)
-    else:
-        hints = get_type_hints(fnc)
-
-    return_annotation = hints.get("return", inspect._empty)
-
-    _type_fn = getattr(fnc, "_wagtail_ninja_type_fn", None)
-
-    if return_annotation is not inspect._empty:
-        ret_type = return_annotation
-    elif _type_fn and callable(_type_fn):
-        ret_type = _type_fn()
-    else:
-        ret_type = Any
-    return ret_type
-
-
-global_known_blocks = {}
-
-
 def big_stream_resolver(model_field, imports: set[str], state):
     ret = []
+
+    # StreamBlock vs simple python tuple list
     if isinstance(model_field.block_types_arg, StreamBlock):
         streamblocks = [
             (k, v) for k, v in model_field.block_types_arg.child_blocks.items()
@@ -233,46 +193,41 @@ def big_stream_resolver(model_field, imports: set[str], state):
     blocknames = []
 
     for block in streamblocks:
-        if inspect.isclass(block[1]):
-            current_block_class = block[1]
-        else:
-            current_block_class = block[1].__class__
+        block_tag: str = block[0]
+        block_val: wagtail_blocks.Block = block[1]
+
+        current_block_class = block_val.__class__
 
         blockname = f"Gen{current_block_class.__name__}Schema"
 
-        if block[0] in global_known_blocks:
-            former_block_class = global_known_blocks[block[0]]
-
-            if former_block_class is not current_block_class:
-                x1 = inspect.getfile(former_block_class)
+        if existing_block := state.schemas_init.stream_blocks.get(
+            current_block_class.__name__
+        ):
+            if current_block_class is not existing_block.model:
+                x1 = inspect.getfile(existing_block.model)
                 x2 = inspect.getfile(current_block_class)
 
                 raise Exception(
-                    f"Block {block[0]} is defined twice with different types. This is not supported yet.\n"
-                    f"{former_block_class} {x1}\n"
-                    f"{block[1]} {x2}"
+                    f"Block {block_tag} is defined twice with different types. This is not supported yet.\n"
+                    f"{existing_block.model} {x1}\n"
+                    f"{block_val} {x2}"
                 )
 
         else:
-            more_class_defs = []
             _val = _resolve_type_and_imports(
-                new_block_map(block[1], more_class_defs, imports),
+                new_block_map(block_val, imports, state),
                 state.schemas_init.imports,
             )
 
-            if more_class_defs:
-                state.schemas_init.block_defs += more_class_defs
-            state.schemas_init.block_defs += [
-                f"class {blockname}(Schema):\n"
-                f'    id: str\n'
-                f'    type: Literal["{block[0]}"]\n'
-                f"    value: {_val}"
-                # f"    value: Any"
-            ]
-
-            state.schemas_init.imports.add("import typing")
-
-            global_known_blocks[block[0]] = current_block_class
+            state.schemas_init.stream_blocks[current_block_class.__name__] = BlockDef(
+                model=current_block_class,
+                definition=(
+                    f"class {blockname}(Schema):\n"
+                    f"    id: str\n"
+                    f'    type: Literal["{block_tag}"]\n'
+                    f"    value: {_val}"
+                ),
+            )
 
         blocknames.append(f"{blockname}")
 
@@ -419,6 +374,25 @@ def derive_annotations_and_resolvers(
         )
     )
     schemas_module.imports.update(imports)
+
+
+def _get_method_annotations(fnc: Callable | property):
+    if isinstance(fnc, property):
+        hints = get_type_hints(fnc.fget)
+    else:
+        hints = get_type_hints(fnc)
+
+    return_annotation = hints.get("return", inspect._empty)
+
+    _type_fn = getattr(fnc, "_wagtail_ninja_type_fn", None)
+
+    if return_annotation is not inspect._empty:
+        ret_type = return_annotation
+    elif _type_fn and callable(_type_fn):
+        ret_type = _type_fn()
+    else:
+        ret_type = Any
+    return ret_type
 
 
 def _resolve_type_and_imports(annotation: Any, imports: set) -> str:

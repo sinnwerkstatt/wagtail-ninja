@@ -674,8 +674,8 @@ wheels = [
 
 [[package]]
 name = "wagtail-ninja"
-version = "0.2b1"
-source = { virtual = "." }
+version = "0.2b5"
+source = { editable = "." }
 dependencies = [
     { name = "django" },
     { name = "django-ninja" },

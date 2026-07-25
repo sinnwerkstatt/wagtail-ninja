@@ -42,9 +42,8 @@ class Command(BaseCommand):
 
         _generated_files = self.write_schemas(state)
 
-        if state.schemas_init.block_defs or state.schemas_init.image_model:
-            output_path = self.write_schemas_init(state)
-            _generated_files.append(output_path)
+        schemas_output_path = self.write_schemas_init(state)
+        _generated_files.append(schemas_output_path)
 
         api_output_path = self.write_api_file(state)
         _generated_files.append(api_output_path)

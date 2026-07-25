@@ -1,6 +1,6 @@
 import uuid
 from datetime import datetime
-from typing import Any, Literal
+from typing import Any, ClassVar, Literal
 
 from ninja import ModelSchema, Schema
 from pydantic import Field, RootModel
@@ -156,7 +156,7 @@ class WagtailImageSchema(ModelSchema):
 
     class Meta:
         model = Image
-        fields = ["title", "description", "width", "height"]
+        fields: ClassVar = ["title", "description", "width", "height"]
 
     @staticmethod
     def resolve_meta(img: Image, context) -> WagtailImageMetaSchema:
@@ -177,7 +177,7 @@ class WagtailDocumentSchema(ModelSchema):
 
     class Meta:
         model = AbstractDocument
-        fields = ["title"]
+        fields: ClassVar = ["title"]
 
     meta: WagtailDocumentMetaSchema
 
@@ -203,4 +203,4 @@ class RedirectSchema(ModelSchema):
 
     class Meta:
         model = Redirect
-        fields = ["id", "old_path", "is_permanent"]
+        fields: ClassVar = ["id", "old_path", "is_permanent"]

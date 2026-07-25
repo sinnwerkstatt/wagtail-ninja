@@ -22,7 +22,7 @@ select = [
     "UP",
 ]
 ignore = [
-#    "C901",
+    "C901",
     "E501", # line too long 🤷
 #    "E722", # can't deal with all the intentional excepts right now
 #    "N815", # mixedCase situations
@@ -53,5 +53,6 @@ section-order = [
 
 [lint.per-file-ignores]
 "tests/**.py" = ["ALL"]
+"src/wagtail_ninja/_django_ninja_patch.py" = ["PLC0415",'C400','C408']
 
 

@@ -8,7 +8,7 @@ from wagtail.contrib.redirects.middleware import get_redirect as wt_get_redirect
 from wagtail.contrib.redirects.models import Redirect
 from wagtail.models import Locale, Page, PageViewRestriction, Site
 
-from . import WagtailNinjaException
+from . import WagtailNinjaError
 from ._django_ninja_patch import apply_django_ninja_operation_result_to_response_patch
 
 apply_django_ninja_operation_result_to_response_patch()
@@ -111,7 +111,7 @@ def find_page(request: HttpRequest, html_path: str, locale: str | None = None):
 
 def get_page_preview(content_type, token):
     if find_spec("wagtail_headless_preview") is None:
-        raise WagtailNinjaException(">>> wagtail_headless_preview not installed <<<")
+        raise WagtailNinjaError(">>> wagtail_headless_preview not installed <<<")
 
     from wagtail_headless_preview.models import PagePreview  # noqa: PLC0415
 

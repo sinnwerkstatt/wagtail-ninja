@@ -28,7 +28,7 @@ from wagtail.fields import RichTextField, StreamField
 from wagtail.images.models import AbstractImage
 from wagtail.models import Page
 
-from wagtail_ninja import WagtailNinjaException
+from wagtail_ninja import WagtailNinjaError
 from wagtail_ninja._internal_schema import BlockDef, SchemaModel, SchemasModule, State
 
 logger = logging.getLogger(__name__)
@@ -76,12 +76,18 @@ def new_block_map(block: wagtail_blocks.Block, imports, state: State):
         ):
             return "str" + suffix
         case wagtail_blocks.ChoiceBlock():
-            return f"Literal[{','.join(f'"{choice[0]}"' for choice in block.field.choices)}]"
+            ret = f"Literal[{','.join(f'"{choice[0]}"' for choice in block.field.choices)}]"
+            if block._default is None and not block.required:
+                return ret + " | None"
+
+            return ret
 
         case wagtail_blocks.BooleanBlock():
             return "bool" + suffix
         case wagtail_blocks.IntegerBlock():
             return "int" + suffix
+        case wagtail_blocks.DecimalBlock():
+            return "float" + suffix
         case wagtail_blocks.FloatBlock():
             return "float" + suffix
         case wagtail_blocks.DateBlock():
@@ -97,7 +103,9 @@ def new_block_map(block: wagtail_blocks.Block, imports, state: State):
             for name, child in block.child_blocks.items():
                 blockname = f"Gen{child.__class__.__name__}Schema"
 
-                if existing_block := state.schemas_init.stream_blocks.get(child.__class__.__name__):
+                if existing_block := state.schemas_init.stream_blocks.get(
+                    child.__class__.__name__
+                ):
                     if child.__class__ is not existing_block.model:
                         x1 = inspect.getfile(existing_block.model)
                         x2 = inspect.getfile(child.__class__)
@@ -112,20 +120,23 @@ def new_block_map(block: wagtail_blocks.Block, imports, state: State):
                         new_block_map(child, imports, state),
                         state.schemas_init.imports,
                     )
-                    
 
-                    state.schemas_init.stream_blocks[child.__class__.__name__] = BlockDef(
-                        model=child.__class__,
-                        definition=(
-                            f"class {blockname}(Schema):\n"
-                            f"    id: str\n"
-                            f"    type: Literal['{name}']\n"
-                            f"    value: {resolved}\n"
-                        ),
+                    state.schemas_init.stream_blocks[child.__class__.__name__] = (
+                        BlockDef(
+                            model=child.__class__,
+                            definition=(
+                                f"class {blockname}(Schema):\n"
+                                f"    id: str\n"
+                                f"    type: Literal['{name}']\n"
+                                f"    value: {resolved}\n"
+                            ),
+                        )
                     )
                 blocknames.append(f"{blockname}")
 
-            return f'list[Annotated[{"|".join(blocknames)}, Field(discriminator="type")]]'
+            return (
+                f'list[Annotated[{"|".join(blocknames)}, Field(discriminator="type")]]'
+            )
 
         case wagtail_blocks.StructBlock():
             current_block_class = block.__class__
@@ -256,7 +267,7 @@ def derive_annotations_and_resolvers(
     for field in getattr(page_model, "api_fields", []):
         if isinstance(field, APIField):
             if field.serializer:
-                raise WagtailNinjaException(
+                raise WagtailNinjaError(
                     f"api_fields cannot contain DRF serializers.\n{field} for {page_model}"
                 )
             field = field.name

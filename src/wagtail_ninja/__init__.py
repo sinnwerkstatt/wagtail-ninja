@@ -1,2 +1,2 @@
-class WagtailNinjaException(Exception):
+class WagtailNinjaError(Exception):
     pass

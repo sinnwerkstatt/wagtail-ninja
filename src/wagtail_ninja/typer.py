@@ -74,7 +74,7 @@ def new_block_map(block: wagtail_blocks.Block, imports, state: State):
             | wagtail_blocks.EmailBlock()
             | wagtail_blocks.URLBlock()
         ):
-            return "str" + suffix
+            return "str"
         case wagtail_blocks.ChoiceBlock():
             ret = f"Literal[{','.join(f'"{choice[0]}"' for choice in block.field.choices)}]"
             if block._default is None and not block.required:

@@ -193,7 +193,6 @@ def new_block_map(block: wagtail_blocks.Block, imports, state: State):
             return TypedTable
 
         case _:
-
             try:
                 # Get the source file path
                 source_file = inspect.getsourcefile(type(block))

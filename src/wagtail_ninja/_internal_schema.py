@@ -11,7 +11,7 @@ class BlockDef(BaseModel):
 
 class SchemasInit(BaseModel):
     imports: set[str] = {
-        "from ninja import ModelSchema",
+        # "from ninja import ModelSchema",
         "from ninja import Schema",
         "from typing import Any",
         "from typing import Literal",

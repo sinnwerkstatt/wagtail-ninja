@@ -8,6 +8,7 @@ from __future__ import annotations
 {{ imprt|safe }}{% endfor %}
 
 {% if state.schemas_init.image_model %}
+from ninja import ModelSchema
 class WagtailImageMetaSchema(Schema):
     type: str
     # detail_url: str

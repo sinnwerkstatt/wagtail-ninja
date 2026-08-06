@@ -53,6 +53,7 @@ class TypedTable(TypedDict):
 def new_block_map(block: wagtail_blocks.Block, imports, state: State):
     # check if the block has get_api_representation first
     get_api_rep_fn = getattr(block, "get_api_representation", None)
+
     if get_api_rep_fn and callable(get_api_rep_fn):
         hints = get_type_hints(get_api_rep_fn)
         return_annotation = hints.get("return", inspect._empty)
@@ -65,6 +66,10 @@ def new_block_map(block: wagtail_blocks.Block, imports, state: State):
             if callable(_type_fn):
                 return _type_fn()
 
+        # if "get_api_representation" in block.__class__.__dict__:
+        #     # it is specified and not only inherited and there's no return type
+        #     return "Any"
+
     suffix = "" if block.required else " | None"
     match block:
         case (
@@ -76,7 +81,7 @@ def new_block_map(block: wagtail_blocks.Block, imports, state: State):
         ):
             return "str"
         case wagtail_blocks.ChoiceBlock():
-            ret = f"Literal[{','.join(f'"{choice[0]}"' for choice in block.field.choices)}]"
+            ret = f"Literal[{', '.join(repr(choice[0]) for choice in block.field.choices)}]"
             if block._default is None and not block.required:
                 return ret + " | None"
 
@@ -94,6 +99,8 @@ def new_block_map(block: wagtail_blocks.Block, imports, state: State):
             return "date" + suffix
         case wagtail_blocks.DateTimeBlock():
             return "datetime" + suffix
+        case wagtail_blocks.PageChooserBlock():
+            return "int" + suffix
         case wagtail_blocks.ListBlock():
             return f"list[{new_block_map(block.child_block, imports, state)}]"
         case wagtail_blocks.StreamBlock():
@@ -186,7 +193,18 @@ def new_block_map(block: wagtail_blocks.Block, imports, state: State):
             return TypedTable
 
         case _:
-            logger.warning(f"unhandled block type: {block}")
+
+            try:
+                # Get the source file path
+                source_file = inspect.getsourcefile(type(block))
+                # Get the starting line number of its class/definition
+                _, line_num = inspect.getsourcelines(type(block))
+                location = f"{source_file}:{line_num}"
+            except (TypeError, OSError):
+                # Fallback if inspect fails (e.g. built-in types or dynamic objects)
+                location = "unknown"
+
+            logger.warning(f"unhandled block type: {block} at {location}")
             return "Any"
 
 

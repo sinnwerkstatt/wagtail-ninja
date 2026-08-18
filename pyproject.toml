@@ -1,6 +1,6 @@
 [project]
 name = "wagtail-ninja"
-version = "0.2b8"
+version = "0.2b9"
 description = "Ninja API for Wagtail"
 requires-python = ">=3.14"
 license = "BSD-3-Clause"

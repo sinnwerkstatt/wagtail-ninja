@@ -18,7 +18,7 @@ from modelcluster.contrib.taggit import ClusterTaggableManager
 
 from django.conf import settings
 from django.core.exceptions import FieldDoesNotExist
-from django.db.models import ForeignKey, ManyToOneRel
+from django.db.models import ForeignKey, ManyToOneRel,CharField
 from wagtail import blocks as wagtail_blocks
 from wagtail.api import APIField
 from wagtail.blocks import StreamBlock
@@ -99,7 +99,7 @@ def new_block_map(block: wagtail_blocks.Block, imports, state: State):
             return "date" + suffix
         case wagtail_blocks.DateTimeBlock():
             return "datetime" + suffix
-        case wagtail_blocks.PageChooserBlock():
+        case wagtail_blocks.ChooserBlock():
             return "int" + suffix
         case wagtail_blocks.ListBlock():
             return f"list[{new_block_map(block.child_block, imports, state)}]"
@@ -299,6 +299,14 @@ def derive_annotations_and_resolvers(
                 # props[f"resolve_{field}"] = _create_method_resolver(f"resolve_{field}")
                 continue  # won't register for Django-field mapping
 
+            elif isinstance(model_field, CharField):
+                if choices := model_field.get_choices():
+                    ret = f"Literal[{', '.join(repr(choice[0]) for choice in choices)}]"
+                    if model_field.null:
+                        ret = f"{ret} | None"
+                    field_annotations += [f"{field}: {ret}"]
+                else:
+                    field_annotations += [f"{field}: str"]
             elif isinstance(model_field, StreamField):
                 xtype, _xtra_schemas = big_stream_resolver(model_field, imports, state)
                 extra_schemas += [_xtra_schemas]

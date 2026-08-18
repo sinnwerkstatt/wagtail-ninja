@@ -3,12 +3,14 @@ import logging
 import warnings
 from typing import Any
 
+import ninja.schema
 import pydantic
 from ninja import Status
 from ninja.constants import NOT_SET
 from ninja.errors import ConfigError
 from ninja.operation import ResponseObject
 from ninja.schema import Schema, pydantic_version
+from pydantic_core import core_schema
 
 from django.http import HttpRequest, HttpResponse
 from django.http.response import HttpResponseBase
@@ -20,7 +22,31 @@ BUGGED_VERSION_MIN = "1.4.3"
 BUGGED_VERSION_MAX = "1.5.3"
 
 DIFFERENT_PATCH_MIN = "1.6.1"
-DIFFERENT_PATCH_MAX = "1.6.2"
+DIFFERENT_PATCH_MAX = "1.6.3"
+
+
+def monkey_patch_schema():
+    original_dict_schema = ninja.schema.NinjaGenerateJsonSchema.dict_schema
+
+    def custom_dict_schema(self, schema: core_schema.DictSchema) -> dict:
+        json_schema = original_dict_schema(self, schema)
+
+        keys_schema = schema.get("keys_schema")
+        if keys_schema and keys_schema.get("type") == "literal":
+            expected = keys_schema.get("expected")
+            if expected and all(isinstance(k, str) for k in expected):
+                values_schema = schema.get("values_schema", {"type": "any"})
+                v_schema = self.generate_inner(values_schema)
+                return {
+                    "type": "object",
+                    "properties": dict.fromkeys(expected, v_schema),
+                    "additionalProperties": False,
+                }
+
+        return json_schema
+
+    # Override the schema generator method in Django Ninja
+    ninja.schema.NinjaGenerateJsonSchema.dict_schema = custom_dict_schema
 
 
 def apply_django_ninja_operation_result_to_response_patch():

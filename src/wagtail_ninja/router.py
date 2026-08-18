@@ -9,9 +9,13 @@ from wagtail.contrib.redirects.models import Redirect
 from wagtail.models import Locale, Page, PageViewRestriction, Site
 
 from . import WagtailNinjaError
-from ._django_ninja_patch import apply_django_ninja_operation_result_to_response_patch
+from ._django_ninja_patch import (
+    apply_django_ninja_operation_result_to_response_patch,
+    monkey_patch_schema,
+)
 
 apply_django_ninja_operation_result_to_response_patch()
+monkey_patch_schema()
 
 
 def get_base_queryset(request: HttpRequest, type: str | None = None):

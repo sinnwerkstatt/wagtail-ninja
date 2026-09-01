@@ -260,10 +260,14 @@ def big_stream_resolver(model_field, imports: set[str], state):
         blocknames.append(f"{blockname}")
 
     if len(streamblocks) == 1:
-        imports.add(f"from {state.modpath}.schemas import {blocknames[0]}")
+        imports.add(
+            f"from {state.modpath}.schemas.{state.basefile} import {blocknames[0]}"
+        )
         return f"list[{blocknames[0]}]", "\n".join(ret)
 
-    imports.add(f"from {state.modpath}.schemas import {','.join(blocknames)}")
+    imports.add(
+        f"from {state.modpath}.schemas.{state.basefile} import {','.join(blocknames)}"
+    )
 
     state.schemas_init.block_names.update(blocknames)
 
@@ -300,7 +304,7 @@ def derive_annotations_and_resolvers(
                 continue  # won't register for Django-field mapping
 
             elif isinstance(model_field, CharField):
-                if choices := model_field.get_choices():
+                if model_field._choices and (choices := model_field.get_choices()):
                     ret = f"Literal[{', '.join(repr(choice[0]) for choice in choices)}]"
                     if model_field.null:
                         ret = f"{ret} | None"
@@ -339,7 +343,7 @@ def derive_annotations_and_resolvers(
                     ]
                     if hasattr(settings, "WAGTAILIMAGES_IMAGE_MODEL"):
                         imports.add(
-                            f"from {state.modpath}.schemas import WagtailImageSchema"
+                            f"from {state.modpath}.schemas.{state.basefile} import WagtailImageSchema"
                         )
                     else:
                         imports.add(

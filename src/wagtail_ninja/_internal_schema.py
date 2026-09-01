@@ -49,6 +49,7 @@ class State(BaseModel):
     modpath: str
     schemas_init: SchemasInit = SchemasInit()
     api_apps: list[ApiApp] = []
+    basefile: str = "base"
 
 
 class SchemaModel(BaseModel):

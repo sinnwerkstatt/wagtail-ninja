@@ -33,6 +33,8 @@ class Command(BaseCommand):
             schemas_dir.mkdir()
 
         state = State(outdir=outdir, modpath=outfolder)
+        if hasattr(settings, "WAGTAIL_NINJA_BASE_FILE"):
+            state.basefile = settings.WAGTAIL_NINJA_BASE_FILE
 
         if hasattr(settings, "WAGTAILIMAGES_IMAGE_MODEL"):
             state.schemas_init.image_model = settings.WAGTAILIMAGES_IMAGE_MODEL
@@ -49,12 +51,20 @@ class Command(BaseCommand):
         _generated_files.append(api_output_path)
         self.cleanup(_generated_files)
 
+        old_init_file = state.outdir / "schemas/__init__.py"
+        if old_init_file.exists():
+            old_init_file.unlink()
+            self.stdout.write(
+                self.style.WARNING(f"Watch out!: We migrated the old __init__.py file to a schemas/{state.basefile}.py")
+            )
+
+
     def write_schemas_init(self, state: State):
-        output_path = state.outdir / "schemas/__init__.py"
+        output_path = state.outdir / f"schemas/{state.basefile}.py"
 
         with open(output_path, "w") as f:
             f.write(
-                render_to_string("wagtail_ninja/schemas_init.py.j2", {"state": state})
+                render_to_string("wagtail_ninja/schemas_base.py.j2", {"state": state})
             )
 
         self.stdout.write(
@@ -73,6 +83,10 @@ class Command(BaseCommand):
                 app_models[model._meta.app_label].append(model)
 
         for app_label, models in app_models.items():
+            if app_label == state.basefile:
+                raise Exception(
+                    f'Naming collision. The default file would be called {state.basefile}.py, but you have a model named `{state.basefile}` so we have a collision. You can change it via WAGTAIL_NINJA_BASE_FILE="mybase" in your settings.'
+                )
             app_config = apps.get_app_config(app_label)
             output_path = state.outdir / f"schemas/{app_label}.py"
 

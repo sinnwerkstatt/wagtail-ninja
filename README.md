@@ -48,7 +48,6 @@ from some.path.api import api as ninja_api
 
 urlpatterns = [
     # ... other Wagtail and Django paths
-    
     # Expose your Wagtail Ninja API
     path("api/wagtail/v3/", ninja_api.urls),
 ]
@@ -98,9 +97,11 @@ Consider this common scenario:
 from ninja import ModelSchema
 from .models import MyPage, OtherPage
 
+
 class OtherPageSchema(ModelSchema):
     class Meta:
         model = OtherPage
+
 
 class MyPageSchema(ModelSchema):
     class Meta:
@@ -110,13 +111,14 @@ class MyPageSchema(ModelSchema):
 ```python
 # models.py
 # This will cause a circular import if OtherPageSchema is imported at the top level
-# from .schema import OtherPageSchema 
+# from .schema import OtherPageSchema
+
 
 class MyPage(Page):
-    api_fields = ['related_otherpage']
+    api_fields = ["related_otherpage"]
 
     # Attempting to type-hint directly leads to circular dependency
-    # def related_otherpage(self) -> OtherPageSchema: 
+    # def related_otherpage(self) -> OtherPageSchema:
     #    related = OtherPage.objects.first() # Example logic
     #    return OtherPageSchema.from_orm(related)
 ```
@@ -128,24 +130,28 @@ The current "best" solution to avoid circular dependencies while still providing
 from wagtail.models import Page
 from django.db import models
 
+
 class OtherPage(Page):
     # Your fields for OtherPage
     pass
 
+
 class MyPage(Page):
     # Your fields for MyPage
-    api_fields = ['related_otherpage']
+    api_fields = ["related_otherpage"]
 
     def related_otherpage(self):
         # Local import to avoid circular dependency at module load time
-        from .schema import OtherPageSchema 
-        related = OtherPage.objects.first() # Your logic to get the related object(s)
+        from .schema import OtherPageSchema
+
+        related = OtherPage.objects.first()  # Your logic to get the related object(s)
         return OtherPageSchema.from_orm(related)
 
     @staticmethod
     def type_fn():
         # This static method returns the schema class itself
         from .schema import OtherPageSchema
+
         return OtherPageSchema
 
     # Attach the type_fn to your method with a special attribute

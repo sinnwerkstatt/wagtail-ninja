@@ -18,7 +18,7 @@ from modelcluster.contrib.taggit import ClusterTaggableManager
 
 from django.conf import settings
 from django.core.exceptions import FieldDoesNotExist
-from django.db.models import ForeignKey, ManyToOneRel,CharField
+from django.db.models import CharField, ForeignKey, ManyToOneRel
 from wagtail import blocks as wagtail_blocks
 from wagtail.api import APIField
 from wagtail.blocks import StreamBlock

@@ -296,6 +296,12 @@ def derive_annotations_and_resolvers(
             model_field = page_model._meta.get_field(field)
 
             if (
+                ninjatype_fn := getattr(page_model, f"ninjatype_{field}", None)
+            ) and callable(ninjatype_fn):
+                ret_type = ninjatype_fn()
+                new_ret_type = _resolve_type_and_imports(ret_type, imports)
+                field_annotations += [f"{field}: {new_ret_type}"]
+            elif (
                 resolve_fn := getattr(page_model, f"resolve_{field}", None)
             ) and callable(resolve_fn):
                 raise NotImplementedError("resolve_fn not supported yet")

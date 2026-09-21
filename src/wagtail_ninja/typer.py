@@ -186,7 +186,7 @@ def new_block_map(block: wagtail_blocks.Block, imports, state: State):
             return f"{current_block_class.__name__}Value"
 
         case wagtail_blocks.StaticBlock():
-            return "None"
+            return "Any"
 
         case typed_table_block_blocks.TypedTableBlock():
             # wagtail.contrib.typed_table_block

@@ -55,9 +55,10 @@ class Command(BaseCommand):
         if old_init_file.exists():
             old_init_file.unlink()
             self.stdout.write(
-                self.style.WARNING(f"Watch out!: We migrated the old __init__.py file to a schemas/{state.basefile}.py")
+                self.style.WARNING(
+                    f"Watch out!: We migrated the old __init__.py file to a schemas/{state.basefile}.py"
+                )
             )
-
 
     def write_schemas_init(self, state: State):
         output_path = state.outdir / f"schemas/{state.basefile}.py"

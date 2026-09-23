@@ -18,7 +18,7 @@ from modelcluster.contrib.taggit import ClusterTaggableManager
 
 from django.conf import settings
 from django.core.exceptions import FieldDoesNotExist
-from django.db.models import CharField, ForeignKey, ManyToOneRel
+from django.db.models import CharField, ForeignKey, ManyToOneRel, JSONField
 from wagtail import blocks as wagtail_blocks
 from wagtail.api import APIField
 from wagtail.blocks import StreamBlock
@@ -308,6 +308,15 @@ def derive_annotations_and_resolvers(
                 # props["__annotations__"][field] = _get_method_annotations(resolve_fn)
                 # props[f"resolve_{field}"] = _create_method_resolver(f"resolve_{field}")
                 continue  # won't register for Django-field mapping
+
+            elif isinstance(model_field, JSONField):
+                # only relevant for inherited JSONField
+                if type(model_field) is not JSONField:
+                    if _ninja_schema := getattr(model_field.__class__, "_ninja_schema", None):
+                        ret = _resolve_type_and_imports(_ninja_schema, imports)
+                        if model_field.null:
+                            ret = f"{ret} | None"
+                        field_annotations += [f"{field}: {ret}"]
 
             elif isinstance(model_field, CharField):
                 if model_field._choices and (choices := model_field.get_choices()):

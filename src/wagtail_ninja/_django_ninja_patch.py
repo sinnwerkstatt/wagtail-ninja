@@ -18,7 +18,7 @@ logger = logging.getLogger(__name__)
 
 LIBRARY_NAME = "ninja"
 BUGGED_VERSION_MIN = "1.6.1"
-BUGGED_VERSION_MAX = "1.7.0"
+BUGGED_VERSION_MAX = "1.7.1"
 
 
 def monkey_patch_schema():

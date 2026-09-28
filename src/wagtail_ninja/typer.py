@@ -304,9 +304,14 @@ def derive_annotations_and_resolvers(
             elif (
                 resolve_fn := getattr(page_model, f"resolve_{field}", None)
             ) and callable(resolve_fn):
-                raise NotImplementedError("resolve_fn not supported yet")
-                # props["__annotations__"][field] = _get_method_annotations(resolve_fn)
-                # props[f"resolve_{field}"] = _create_method_resolver(f"resolve_{field}")
+                ret_type = _get_method_annotations(resolve_fn)
+                new_ret_type = _resolve_type_and_imports(ret_type, imports)
+                field_annotations += [f"{field}: {new_ret_type}"]
+                resolvers += [
+                    f"@staticmethod\n"
+                    f"    def resolve_{field}(page, context):\n"
+                    f"        return page.resolve_{field}()"
+                ]
                 continue  # won't register for Django-field mapping
 
             elif isinstance(model_field, JSONField):

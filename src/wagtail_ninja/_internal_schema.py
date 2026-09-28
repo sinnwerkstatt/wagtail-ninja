@@ -36,6 +36,7 @@ class SchemasInit(BaseModel):
 class ApiPair(BaseModel):
     model: str
     schema_name: str
+    import_path: str
 
 
 class ApiApp(BaseModel):

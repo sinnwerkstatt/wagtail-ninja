@@ -98,8 +98,9 @@ class Command(BaseCommand):
                 derive_annotations_and_resolvers(model, state, schemas_module)
 
                 model_name = model.__name__
+                import_path = model.__module__
                 api_pairs.append(
-                    ApiPair(model=model_name, schema_name=f"Gen{model_name}Schema")
+                    ApiPair(model=model_name, schema_name=f"Gen{model_name}Schema", import_path=import_path)
                 )
 
             with open(output_path, "w") as f:

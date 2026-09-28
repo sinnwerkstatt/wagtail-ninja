@@ -28,7 +28,10 @@ from wagtail.models import Page
 
 
 {% for app in state.api_apps %}
-from {{ app.name }}.models import {% for pair in app.pairs %}{{ pair.model }}{% if not forloop.last %}, {% endif %}{% endfor %}
+{% for pair in app.pairs %}
+from {{ pair.import_path }} import {{ pair.model }}
+{% endfor %}
+
 from {{ state.modpath }}.schemas.{{ app.app_label }} import {% for pair in app.pairs %}{{ pair.schema_name }}{% if not forloop.last %}, {% endif %}{% endfor %}
 {% endfor %}
 
